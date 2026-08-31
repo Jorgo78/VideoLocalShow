@@ -1,0 +1,111 @@
+name: iOS TestFlight build
+
+# Manual trigger only: this uploads a real build to App Store Connect every run, so it
+# shouldn't fire on every push while the signing setup (and later, the app itself) is
+# still being worked out. Switch to `on: push` once this is proven reliable.
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-upload:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install MAUI iOS workload
+        run: dotnet workload install maui-ios
+
+      # --- Codesigning setup -------------------------------------------------------
+      # A dedicated, temporary keychain rather than the runner's default one: it's
+      # created fresh every run and never persists, so there's nothing left over
+      # between builds and nothing to clean up if a run fails partway through.
+      - name: Import distribution certificate
+        env:
+          IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}
+          IOS_P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+
+          echo "$IOS_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$IOS_P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+
+          # Printed so the exact identity string (e.g. "Apple Distribution: Name (TEAMID)")
+          # can be copied into the IOS_CODESIGN_IDENTITY secret the first time this runs.
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Install provisioning profile
+        env:
+          IOS_MOBILEPROVISION_BASE64: ${{ secrets.IOS_MOBILEPROVISION_BASE64 }}
+        run: |
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+
+          echo "$IOS_MOBILEPROVISION_BASE64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+
+          UUID=$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin)
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$PROFILES_DIR/$UUID.mobileprovision"
+
+          # Printed so the exact profile name (needed for CodesignProvision) can be
+          # confirmed against the IOS_CODESIGN_PROVISION secret.
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin
+
+      # --- Build ---------------------------------------------------------------------
+      - name: Build and archive IPA
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.IOS_CODESIGN_IDENTITY }}
+          CODESIGN_PROVISION: ${{ secrets.IOS_CODESIGN_PROVISION }}
+        run: |
+          dotnet build VideoLocalShow.csproj \
+            -f net10.0-ios \
+            -c Release \
+            -p:RuntimeIdentifier=ios-arm64 \
+            -p:ArchiveOnBuild=true \
+            -p:BuildIpa=true \
+            -p:CodesignKey="$CODESIGN_IDENTITY" \
+            -p:CodesignProvision="$CODESIGN_PROVISION" \
+            -p:ApplicationVersion=${{ github.run_number }}
+
+      - name: Locate IPA
+        id: locate_ipa
+        run: |
+          IPA_PATH=$(find bin/Release/net10.0-ios -name "*.ipa" | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "No .ipa produced - check the build step above for signing errors." >&2
+            exit 1
+          fi
+          echo "path=$IPA_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoLocalShow-ipa
+          path: ${{ steps.locate_ipa.outputs.path }}
+
+      # --- Ship to TestFlight ----------------------------------------------------------
+      - name: Upload to App Store Connect
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_KEY_BASE64: ${{ secrets.APPSTORE_API_KEY_BASE64 }}
+        run: |
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          echo "$APPSTORE_API_KEY_BASE64" | base64 --decode > "$HOME/.appstoreconnect/private_keys/AuthKey_$APPSTORE_API_KEY_ID.p8"
+
+          xcrun altool --upload-app \
+            -f "${{ steps.locate_ipa.outputs.path }}" \
+            -t ios \
+            --apiKey "$APPSTORE_API_KEY_ID" \
+            --apiIssuer "$APPSTORE_API_ISSUER_ID"
