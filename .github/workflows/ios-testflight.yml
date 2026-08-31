@@ -120,7 +120,7 @@ jobs:
       - name: Locate IPA
         id: locate_ipa
         run: |
-          IPA_PATH=$(find bin/Release/net10.0-ios -name "*.ipa" | head -n 1)
+          IPA_PATH=$(find bin/Debug/net10.0-ios -name "*.ipa" | head -n 1)
           if [ -z "$IPA_PATH" ]; then
             echo "No .ipa produced - check the build step above for signing errors." >&2
             exit 1
