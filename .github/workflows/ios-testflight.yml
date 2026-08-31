@@ -68,12 +68,18 @@ jobs:
           shasum -a 256 "$RUNNER_TEMP/profile.mobileprovision"
           echo "Decoded profile.mobileprovision size: $(wc -c < "$RUNNER_TEMP/profile.mobileprovision") bytes"
 
-          UUID=$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin)
+          # A real file rather than piping into `PlistBuddy ... /dev/stdin`: PlistBuddy stats
+          # its input before reading it, and a pipe always reports size 0 there, so it was
+          # rejecting perfectly valid piped plist data as "NULL or zero-length" regardless of
+          # what actually came through.
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" -o "$RUNNER_TEMP/profile.plist"
+
+          UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$RUNNER_TEMP/profile.plist")
           cp "$RUNNER_TEMP/profile.mobileprovision" "$PROFILES_DIR/$UUID.mobileprovision"
 
           # Printed so the exact profile name (needed for CodesignProvision) can be
           # confirmed against the IOS_CODESIGN_PROVISION secret.
-          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin
+          /usr/libexec/PlistBuddy -c "Print Name" "$RUNNER_TEMP/profile.plist"
 
       # --- Build ---------------------------------------------------------------------
       - name: Build and archive IPA
