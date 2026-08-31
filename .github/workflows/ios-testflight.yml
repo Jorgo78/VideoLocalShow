@@ -33,7 +33,16 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
           KEYCHAIN_PASSWORD="$(uuidgen)"
 
-          echo "$IOS_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          # printf instead of echo, and openssl's own base64 decoder (-A ignores embedded
+          # whitespace/newlines) instead of the platform `base64` tool, to rule out either one
+          # silently mangling a single very long line - both have bitten people in CI before.
+          printf '%s' "$IOS_P12_BASE64" | openssl base64 -d -A -out "$RUNNER_TEMP/certificate.p12"
+
+          # Diagnostic: compare this against the sha256 of the file that was actually encoded
+          # locally, to tell a corrupted-in-transit secret apart from a bad certificate.
+          echo "Decoded certificate.p12 sha256:"
+          shasum -a 256 "$RUNNER_TEMP/certificate.p12"
+          echo "Decoded certificate.p12 size: $(wc -c < "$RUNNER_TEMP/certificate.p12") bytes"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
