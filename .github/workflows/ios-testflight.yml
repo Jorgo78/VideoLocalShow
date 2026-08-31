@@ -109,3 +109,4 @@ jobs:
             -t ios \
             --apiKey "$APPSTORE_API_KEY_ID" \
             --apiIssuer "$APPSTORE_API_ISSUER_ID"
+
