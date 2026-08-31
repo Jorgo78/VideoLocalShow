@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             x:Class="VideoLocalShow.PlayerPage"
+             BackgroundColor="Black"
+             Shell.NavBarIsVisible="False"
+             Shell.TabBarIsVisible="False">
+
+    <!-- The video fills the whole page; the header floats above it so nothing steals
+         screen space from playback. -->
+    <Grid>
+        <toolkit:MediaElement
+            x:Name="Player"
+            ShouldAutoPlay="True"
+            ShouldShowPlaybackControls="True"
+            HorizontalOptions="Fill"
+            VerticalOptions="Fill" />
+
+        <VerticalStackLayout
+            x:Name="AudioOnlyOverlay"
+            IsVisible="False"
+            InputTransparent="True"
+            HorizontalOptions="Center"
+            VerticalOptions="Center"
+            Spacing="8">
+            <Label Text="&#127925;" FontSize="64" HorizontalTextAlignment="Center" TextColor="White" />
+            <Label Text="Questo file contiene solo l'audio, nessun video." TextColor="White" FontSize="14" HorizontalTextAlignment="Center" />
+        </VerticalStackLayout>
+
+        <Grid
+            x:Name="HeaderBar"
+            VerticalOptions="Start"
+            ColumnDefinitions="*,Auto"
+            ColumnSpacing="8"
+            Padding="16,20"
+            BackgroundColor="#B0000000">
+            <Label
+                x:Name="TitleLabel"
+                Grid.Column="0"
+                TextColor="White"
+                FontAttributes="Bold"
+                FontSize="15"
+                LineBreakMode="TailTruncation"
+                VerticalOptions="Center" />
+            <Button
+                Grid.Column="1"
+                Text="Chiudi"
+                FontSize="14"
+                Padding="14,6"
+                Clicked="OnCloseClicked" />
+        </Grid>
+    </Grid>
+
+</ContentPage>

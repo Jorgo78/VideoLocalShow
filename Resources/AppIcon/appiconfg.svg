@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <!-- A play triangle (this is a video app) with a download arrow tucked underneath it
+         (what the app actually does to that video) - kept within the adaptive icon's safe
+         center zone so neither shape gets cropped on masked launcher icons. -->
+    <path d="M 158,96 L 158,258 L 300,177 Z" fill="#FFFFFF"/>
+    <path d="M 208,220 h 40 v 70 h 36 l -56,58 -56,-58 h 36 z" fill="#FFFFFF"/>
+</svg>

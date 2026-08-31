@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:models="clr-namespace:VideoLocalShow.Models"
+             x:Class="VideoLocalShow.DownloadsPage"
+             Title="Download">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem x:Name="SelectionToolbarItem" Text="Seleziona" Clicked="OnToggleSelectionModeClicked" Order="Primary" Priority="0" />
+    </ContentPage.ToolbarItems>
+
+    <Grid Padding="10,8,10,0" RowDefinitions="Auto,*,Auto" RowSpacing="4">
+
+        <Label
+            x:Name="EmptyLabel"
+            Grid.Row="1"
+            Text="Non hai ancora scaricato nessun video."
+            TextColor="Gray"
+            HorizontalOptions="Center"
+            VerticalOptions="Center"
+            IsVisible="False" />
+
+        <RefreshView x:Name="DownloadsRefreshView" Grid.Row="1" Refreshing="OnRefreshing">
+            <CollectionView x:Name="DownloadsList" SelectionMode="None">
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout Orientation="Vertical" ItemSpacing="6" />
+                </CollectionView.ItemsLayout>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:DownloadedFile">
+                        <Border Style="{StaticResource Card}" Padding="8">
+                            <Grid ColumnDefinitions="Auto,72,*,Auto" ColumnSpacing="8">
+
+                                <!-- Only shown in multi-select mode, replacing the play/delete
+                                     buttons with a way to pick this row for a bulk delete. -->
+                                <CheckBox
+                                    Grid.Column="0"
+                                    Scale="0.85"
+                                    VerticalOptions="Center"
+                                    IsVisible="{Binding IsSelectionMode}"
+                                    IsChecked="{Binding IsSelected}"
+                                    CheckedChanged="OnDownloadCheckedChanged" />
+
+                                <!-- Video frame, with a music glyph standing in for audio-only files -->
+                                <Border
+                                    Grid.Column="1"
+                                    WidthRequest="72"
+                                    HeightRequest="42"
+                                    Stroke="Transparent"
+                                    BackgroundColor="#22808080"
+                                    StrokeShape="RoundRectangle 10"
+                                    VerticalOptions="Center">
+                                    <Grid>
+                                        <Label
+                                            Text="&#127925;"
+                                            FontSize="18"
+                                            HorizontalOptions="Center"
+                                            VerticalOptions="Center"
+                                            IsVisible="{Binding HasNoThumbnail}" />
+                                        <Image
+                                            Source="{Binding ThumbnailPath}"
+                                            Aspect="AspectFill"
+                                            IsVisible="{Binding HasThumbnail}" />
+                                    </Grid>
+                                </Border>
+
+                                <VerticalStackLayout Grid.Column="2" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="{Binding FileName}" FontAttributes="Bold" FontSize="14" LineBreakMode="TailTruncation" MaxLines="1" />
+                                    <Label Text="{Binding Details}" Style="{StaticResource MutedLabel}" LineBreakMode="TailTruncation" MaxLines="1" />
+                                </VerticalStackLayout>
+
+                                <ImageButton
+                                    Grid.Column="3"
+                                    Source="icon_play.png"
+                                    Command="{Binding PlayCommand}"
+                                    CommandParameter="{Binding .}"
+                                    SemanticProperties.Description="Anteprima"
+                                    WidthRequest="32"
+                                    HeightRequest="32"
+                                    Padding="8"
+                                    VerticalOptions="Center"
+                                    IsVisible="{Binding ShowRowActions}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+
+        <Button
+            Grid.Row="2"
+            x:Name="DeleteSelectedButton"
+            Text="Elimina selezionati"
+            TextColor="White"
+            BackgroundColor="{StaticResource AccentRed}"
+            CornerRadius="24"
+            HeightRequest="48"
+            FontAttributes="Bold"
+            Margin="0,4,0,8"
+            IsVisible="False"
+            IsEnabled="False"
+            Clicked="OnDeleteSelectedClicked" />
+
+        <!-- Inline preview: tapping a row's play button opens the video right here, playing
+             muted-autoplay style, instead of always jumping straight to the full player.
+             Declared last (not where it visually sits in Grid.Row="0") so that when rotating the
+             device expands it across every row - see SetPreviewFullscreen - it paints on top of
+             the list/button instead of underneath them; Grid stacks children in document order,
+             not by row. Rotating back collapses it to its normal Row="0" slot. -->
+        <!-- Deliberately NOT a rounded-corner Border: MediaElement renders video through a
+             native SurfaceView on Android, which is composited as its own hardware layer below
+             the normal view hierarchy - a Border's rounded-corner clip mask draws on top of
+             that layer and blanks it out, so the video would decode (visible in logcat) but
+             never actually appear on screen. A plain rectangular Grid has no such clip. -->
+        <Grid
+            x:Name="PreviewContainer"
+            Grid.Row="0"
+            IsVisible="False"
+            HeightRequest="210"
+            Margin="0,0,0,12"
+            VerticalOptions="Fill"
+            BackgroundColor="Black">
+            <toolkit:MediaElement
+                x:Name="PreviewPlayer"
+                ShouldAutoPlay="True"
+                ShouldShowPlaybackControls="True"
+                HorizontalOptions="Fill"
+                VerticalOptions="Fill" />
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Padding="10" VerticalOptions="Start" InputTransparent="False">
+                <Label
+                    x:Name="PreviewTitleLabel"
+                    Grid.Column="0"
+                    TextColor="White"
+                    FontAttributes="Bold"
+                    FontSize="13"
+                    LineBreakMode="TailTruncation"
+                    VerticalOptions="Center" />
+                <Button
+                    Grid.Column="1"
+                    Text="✕"
+                    FontSize="14"
+                    Padding="0"
+                    WidthRequest="34"
+                    HeightRequest="34"
+                    CornerRadius="17"
+                    BackgroundColor="#66000000"
+                    TextColor="{StaticResource PrimaryDark}"
+                    SemanticProperties.Description="Chiudi anteprima"
+                    Clicked="OnPreviewCloseClicked" />
+            </Grid>
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="VideoLocalShow.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:VideoLocalShow"
+    Title="VideoLocalShow">
+
+    <TabBar>
+        <ShellContent
+            Title="Home"
+            Icon="icon_home.png"
+            ContentTemplate="{DataTemplate local:MainPage}"
+            Route="MainPage" />
+
+        <ShellContent
+            Title="Download"
+            Icon="icon_downloads.png"
+            ContentTemplate="{DataTemplate local:DownloadsPage}"
+            Route="DownloadsPage" />
+    </TabBar>
+
+</Shell>

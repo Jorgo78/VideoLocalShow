@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Overrides Material's own default bottom navigation bar height (56dp with icon-only,
+         taller once labels are shown, as Shell's TabBar does here) - app-level resources win
+         over the library's when they share a name, so this shrinks the bar without needing a
+         custom renderer. -->
+    <dimen name="design_bottom_navigation_height">52dp</dimen>
+    <dimen name="m3_bottom_nav_min_height">52dp</dimen>
+</resources>

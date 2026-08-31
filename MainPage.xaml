@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:VideoLocalShow.Models"
+             x:Class="VideoLocalShow.MainPage"
+             Title="VideoLocalShow">
+
+    <!-- Two rows: the search bar/status header never scrolls, everything below it does.
+         Search results get their own CollectionView (row "*") rather than being nested inside
+         the general-content ScrollView, so the list is the thing that actually owns scrolling -
+         infinite-scroll ("get close to the end, load more") only fires reliably that way. -->
+    <Grid Padding="10" RowDefinitions="Auto,*" RowSpacing="12">
+
+        <VerticalStackLayout Grid.Row="0" Spacing="16">
+            <!-- URL / search input, styled as a raised pill-shaped card rather than a bare
+                 boxed field - the same "card floating on the page background" language used
+                 for every other grouped block. -->
+            <Border
+                StrokeShape="RoundRectangle 28"
+                Stroke="Transparent"
+                Padding="8,4"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceElevatedLight}, Dark={StaticResource SurfaceElevatedDark}}">
+                <Border.Shadow>
+                    <Shadow Brush="Black" Opacity="0.10" Radius="12" Offset="0,4" />
+                </Border.Shadow>
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4">
+                    <Label
+                        Grid.Column="0"
+                        Text="🔍"
+                        FontSize="16"
+                        VerticalOptions="Center"
+                        Margin="8,0,0,0"
+                        Opacity="0.6" />
+                    <Entry
+                        x:Name="UrlEntry"
+                        Grid.Column="1"
+                        Placeholder="Link YouTube oppure titolo del video..."
+                        BackgroundColor="Transparent"
+                        Completed="OnSearchClicked" />
+                    <ImageButton
+                        x:Name="SearchButton"
+                        Grid.Column="2"
+                        Source="icon_search.png"
+                        SemanticProperties.Description="Cerca"
+                        WidthRequest="38"
+                        HeightRequest="38"
+                        Padding="9"
+                        VerticalOptions="Center"
+                        Clicked="OnSearchClicked" />
+                </Grid>
+            </Border>
+
+            <ActivityIndicator x:Name="BusyIndicator" IsRunning="False" IsVisible="False" />
+
+            <!-- Active downloads live here, in the fixed header, rather than replacing the
+                 search results below: starting a download should not take the results list
+                 away, since picking more videos to queue is the whole point of checking boxes. -->
+            <Label
+                x:Name="ActiveDownloadsHeader"
+                Text="Download in corso"
+                FontAttributes="Bold"
+                FontSize="13"
+                IsVisible="False" />
+
+            <CollectionView x:Name="ActiveDownloadsList" IsVisible="False" SelectionMode="None">
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout Orientation="Vertical" ItemSpacing="6" />
+                </CollectionView.ItemsLayout>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:ActiveDownload">
+                        <Border Style="{StaticResource Card}" Padding="14,10">
+                            <VerticalStackLayout Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <Label
+                                        Grid.Column="0"
+                                        Text="{Binding StatusText}"
+                                        FontSize="13"
+                                        VerticalOptions="Center"
+                                        LineBreakMode="TailTruncation" />
+                                    <Button
+                                        Grid.Column="1"
+                                        Text="✕"
+                                        FontSize="13"
+                                        Padding="0"
+                                        WidthRequest="30"
+                                        HeightRequest="30"
+                                        BackgroundColor="Transparent"
+                                        TextColor="{StaticResource Primary}"
+                                        Command="{Binding CancelCommand}" />
+                                </Grid>
+                                <ProgressBar Progress="{Binding Progress}" HeightRequest="4" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </VerticalStackLayout>
+
+        <!-- Search results: the whole page becomes this list while it is showing. No format
+             picker here - checking a box and downloading always uses the best quality this
+             platform can produce; per-row progress and stop appear once downloading starts. -->
+        <Grid Grid.Row="1" x:Name="SearchResultsSection" IsVisible="False">
+            <CollectionView
+                x:Name="SearchResultsList"
+                SelectionMode="None"
+                RemainingItemsThreshold="5"
+                RemainingItemsThresholdReached="OnSearchResultsThresholdReached">
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout Orientation="Vertical" ItemSpacing="6" />
+                </CollectionView.ItemsLayout>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:SearchResultOption">
+                        <Border Style="{StaticResource Card}" Padding="8">
+                            <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
+                                <Grid Grid.Row="0" ColumnDefinitions="74,*,Auto" ColumnSpacing="8">
+                                    <Border
+                                        Grid.Column="0"
+                                        Stroke="Transparent"
+                                        StrokeShape="RoundRectangle 10"
+                                        HeightRequest="42"
+                                        WidthRequest="74"
+                                        Padding="0"
+                                        VerticalOptions="Center">
+                                        <Image
+                                            Source="{Binding ThumbnailUrl}"
+                                            Aspect="AspectFill" />
+                                    </Border>
+                                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                        <Label Text="{Binding Title}" FontAttributes="Bold" FontSize="14" LineBreakMode="TailTruncation" MaxLines="1" />
+                                        <Label Style="{StaticResource MutedLabel}">
+                                            <Label.FormattedText>
+                                                <FormattedString>
+                                                    <Span Text="{Binding ChannelTitle}" />
+                                                    <Span Text=" · " />
+                                                    <Span Text="{Binding DurationText}" />
+                                                </FormattedString>
+                                            </Label.FormattedText>
+                                        </Label>
+                                        <Label
+                                            Text="✓ Già scaricato"
+                                            FontSize="11"
+                                            FontAttributes="Bold"
+                                            TextColor="{StaticResource AccentGreen}"
+                                            IsVisible="{Binding IsAlreadyDownloaded}" />
+                                    </VerticalStackLayout>
+
+                                    <!-- One tap downloads this video immediately, no selection step.
+                                         A spinner covers the couple of seconds it takes to resolve
+                                         the video before the download itself even starts - without
+                                         it the icon would stay tappable and an impatient second tap
+                                         would queue a redundant duplicate download. Once resolved, a
+                                         small stop button takes its place, then a green check when
+                                         it's done - all right here in the row. -->
+                                    <ImageButton
+                                        Grid.Column="2"
+                                        Source="icon_download.png"
+                                        SemanticProperties.Description="Scarica"
+                                        Padding="7"
+                                        WidthRequest="30"
+                                        HeightRequest="30"
+                                        VerticalOptions="Center"
+                                        IsVisible="{Binding ShowDownloadButton}"
+                                        Command="{Binding DownloadCommand}"
+                                        CommandParameter="{Binding .}" />
+                                    <ActivityIndicator
+                                        Grid.Column="2"
+                                        WidthRequest="30"
+                                        HeightRequest="30"
+                                        VerticalOptions="Center"
+                                        IsVisible="{Binding IsResolving}"
+                                        IsRunning="{Binding IsResolving}" />
+                                    <Button
+                                        Grid.Column="2"
+                                        Text="✕"
+                                        FontSize="13"
+                                        Padding="0"
+                                        WidthRequest="30"
+                                        HeightRequest="30"
+                                        BackgroundColor="Transparent"
+                                        TextColor="{StaticResource Primary}"
+                                        VerticalOptions="Center"
+                                        IsVisible="{Binding IsDownloading}"
+                                        Command="{Binding StopDownloadCommand}" />
+                                    <Label
+                                        Grid.Column="2"
+                                        Text="✓"
+                                        FontSize="18"
+                                        FontAttributes="Bold"
+                                        TextColor="{StaticResource AccentGreen}"
+                                        HorizontalOptions="Center"
+                                        VerticalOptions="Center"
+                                        IsVisible="{Binding ShowCompleteCheckmark}" />
+                                </Grid>
+
+                                <!-- Spans the full card width, rather than being squeezed into the
+                                     title column, so it reads as this row's own progress rather
+                                     than a detail buried next to the metadata. -->
+                                <ProgressBar
+                                    Grid.Row="1"
+                                    Progress="{Binding DownloadProgress}"
+                                    HeightRequest="4"
+                                    IsVisible="{Binding IsDownloading}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+                <CollectionView.Footer>
+                    <ActivityIndicator x:Name="LoadingMoreResultsIndicator" IsRunning="False" IsVisible="False" Margin="0,12" />
+                </CollectionView.Footer>
+            </CollectionView>
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

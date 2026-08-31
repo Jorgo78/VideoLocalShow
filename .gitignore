@@ -1,0 +1,25 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Rider / JetBrains
+.idea/
+
+# macOS
+.DS_Store
+
+# Claude Code local state
+.claude/
+
+# Signing material - never commit these
+*.p12
+*.mobileprovision
+*.p8
+*.cer
+*.csr
+*.key
