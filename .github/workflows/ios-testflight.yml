@@ -92,11 +92,18 @@ jobs:
           # SDK's workload-presence check still walks the full original list first regardless of
           # -f, which is what NETSDK1147 about the (never-installed-here) android workload was
           # actually complaining about. Narrowing the list itself avoids that check entirely.
+          # MtouchLink=None: Release's default (SdkOnly) runs the managed linker to shrink the
+          # build, but it's crashing internally (ILLink MT2231, "Collect Unmarked Members") on a
+          # compiler-generated <PrivateImplementationDetails> static-array-init type - a linker
+          # bug/incompatibility, not anything wrong with the app's own code. Skipping linking
+          # produces a larger IPA, which is unimportant for TestFlight testing on one device -
+          # worth revisiting only if this build is ever headed for actual App Store submission.
           dotnet build VideoLocalShow.csproj \
             -f net10.0-ios \
             -p:TargetFrameworks=net10.0-ios \
             -c Release \
             -p:RuntimeIdentifier=ios-arm64 \
+            -p:MtouchLink=None \
             -p:ArchiveOnBuild=true \
             -p:BuildIpa=true \
             -p:CodesignKey="$CODESIGN_IDENTITY" \
