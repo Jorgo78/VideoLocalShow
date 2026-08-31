@@ -10,6 +10,14 @@
 	     upload. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- The app itself never uses Bluetooth, but Apple's validator flags the Bluetooth API
+	     symbols referenced by a linked third-party library (media/networking dependencies
+	     commonly pull these in even when unused) and requires a purpose string to exist
+	     regardless of whether the app's own code calls them. -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>VideoLocalShow non utilizza il Bluetooth.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>VideoLocalShow non utilizza il Bluetooth.</string>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
