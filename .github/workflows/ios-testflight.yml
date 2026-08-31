@@ -83,6 +83,7 @@ jobs:
 
       # --- Build ---------------------------------------------------------------------
       - name: Build and archive IPA
+        timeout-minutes: 20
         env:
           CODESIGN_IDENTITY: ${{ secrets.IOS_CODESIGN_IDENTITY }}
           CODESIGN_PROVISION: ${{ secrets.IOS_CODESIGN_PROVISION }}
@@ -92,18 +93,24 @@ jobs:
           # SDK's workload-presence check still walks the full original list first regardless of
           # -f, which is what NETSDK1147 about the (never-installed-here) android workload was
           # actually complaining about. Narrowing the list itself avoids that check entirely.
-          # MtouchLink=None: Release's default (SdkOnly) runs the managed linker to shrink the
-          # build, but it's crashing internally (ILLink MT2231, "Collect Unmarked Members") on a
-          # compiler-generated <PrivateImplementationDetails> static-array-init type - a linker
-          # bug/incompatibility, not anything wrong with the app's own code. Skipping linking
-          # produces a larger IPA, which is unimportant for TestFlight testing on one device -
-          # worth revisiting only if this build is ever headed for actual App Store submission.
+          #
+          # Debug, not Release: Release forces full native AOT compilation, which always runs
+          # the managed linker first to work out what to compile - there's no way to skip it.
+          # That linker crashes outright on a compiler-generated <PrivateImplementationDetails>
+          # static-array-init type (ILLink MT2231, "Collect Unmarked Members"); MtouchLink=None
+          # was tried to work around it but doesn't actually disable this particular pass, and
+          # just let it run into a *different*, apparently unbounded hang further in instead (17+
+          # minutes with no progress before being cancelled - see timeout-minutes above as a
+          # backstop against that happening silently again). Debug runs on the Mono interpreter
+          # instead of native AOT, so none of this linking ever has to happen at all - the app
+          # runs slightly slower, which is irrelevant for testing on one device via TestFlight,
+          # and Apple's signing/upload only cares that the IPA is properly signed, not which
+          # MSBuild configuration produced it.
           dotnet build VideoLocalShow.csproj \
             -f net10.0-ios \
             -p:TargetFrameworks=net10.0-ios \
-            -c Release \
+            -c Debug \
             -p:RuntimeIdentifier=ios-arm64 \
-            -p:MtouchLink=None \
             -p:ArchiveOnBuild=true \
             -p:BuildIpa=true \
             -p:CodesignKey="$CODESIGN_IDENTITY" \
