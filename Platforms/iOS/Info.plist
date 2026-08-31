@@ -4,6 +4,12 @@
 <dict>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- The app only talks over standard HTTPS (via HttpClient) - no custom/proprietary
+	     encryption - so it's exempt from export compliance. Declaring that here means App
+	     Store Connect stops asking the encryption-usage question on every single TestFlight
+	     upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
