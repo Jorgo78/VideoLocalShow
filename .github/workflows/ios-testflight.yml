@@ -87,8 +87,14 @@ jobs:
           CODESIGN_IDENTITY: ${{ secrets.IOS_CODESIGN_IDENTITY }}
           CODESIGN_PROVISION: ${{ secrets.IOS_CODESIGN_PROVISION }}
         run: |
+          # -p:TargetFrameworks (plural) overrides the project's whole multi-target list, not
+          # just -f/-p:TargetFramework (singular) which only picks which one gets *built* - the
+          # SDK's workload-presence check still walks the full original list first regardless of
+          # -f, which is what NETSDK1147 about the (never-installed-here) android workload was
+          # actually complaining about. Narrowing the list itself avoids that check entirely.
           dotnet build VideoLocalShow.csproj \
             -f net10.0-ios \
+            -p:TargetFrameworks=net10.0-ios \
             -c Release \
             -p:RuntimeIdentifier=ios-arm64 \
             -p:ArchiveOnBuild=true \
