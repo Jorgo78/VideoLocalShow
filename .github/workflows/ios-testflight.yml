@@ -62,7 +62,11 @@ jobs:
           PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$PROFILES_DIR"
 
-          echo "$IOS_MOBILEPROVISION_BASE64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+          printf '%s' "$IOS_MOBILEPROVISION_BASE64" | openssl base64 -d -A -out "$RUNNER_TEMP/profile.mobileprovision"
+
+          echo "Decoded profile.mobileprovision sha256:"
+          shasum -a 256 "$RUNNER_TEMP/profile.mobileprovision"
+          echo "Decoded profile.mobileprovision size: $(wc -c < "$RUNNER_TEMP/profile.mobileprovision") bytes"
 
           UUID=$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin)
           cp "$RUNNER_TEMP/profile.mobileprovision" "$PROFILES_DIR/$UUID.mobileprovision"
