@@ -20,7 +20,7 @@ public static class ShareDebugLog
     private static string? LogFilePath =>
         NSFileManager.DefaultManager
             .GetContainerUrl(AppGroupId)
-            ?.AppendPathComponent(LogFileName, false)
+            ?.Append(LogFileName, false)
             .Path;
 #endif
 

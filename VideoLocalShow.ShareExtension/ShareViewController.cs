@@ -91,7 +91,7 @@ public class ShareViewController : UIViewController
         try
         {
             var containerUrl = NSFileManager.DefaultManager.GetContainerUrl(AppGroupId);
-            var path = containerUrl?.AppendPathComponent("sharelog.txt", false).Path;
+            var path = containerUrl?.Append("sharelog.txt", false).Path;
             if (path is not null)
             {
                 File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} {message}\n");
