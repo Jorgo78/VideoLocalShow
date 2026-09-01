@@ -1,22 +1,26 @@
 using Foundation;
-using Social;
 using UIKit;
 
 namespace VideoLocalShow.ShareExtension;
 
-// This is the whole UI iOS shows in the "Condividi" sheet once VideoLocalShow is picked -
-// SLComposeServiceViewController is Apple's own built-in compose screen (a text box plus a
-// "Posta"/Post button), the same base class every well-behaved Share Extension uses, instantiated
-// here via MainInterface.storyboard (see Info.plist's NSExtensionMainStoryboard) rather than a
-// direct class reference - that direct-reference approach never actually launched on a physical
-// device despite working from a plain UIViewController subclass in the Simulator.
+// This is the whole UI iOS shows in the "Condividi" sheet once VideoLocalShow is picked - it
+// never actually shows its own screen; it grabs whatever was shared, hands it off, and dismisses
+// itself immediately, no tap required. Instantiated via MainInterface.storyboard (see Info.plist's
+// NSExtensionMainStoryboard) rather than a direct NSExtensionPrincipalClass reference - that
+// direct-reference approach never actually launched on a physical device despite working in the
+// Simulator.
 //
 // The extension runs in its own separate, sandboxed process from the main app - there is no
 // direct way to call into the main app's code from here - so the hand-off goes through an App
-// Group container both processes can see, and the main app is "woken" via its own private URL
-// scheme (see AppDelegate.OpenUrl) to go read what was left there.
+// Group container both processes can see. Waking the main app immediately from here turned out
+// to not be reliably possible either - Apple documents NSExtensionContext.OpenUrl as being for
+// Today/widget extensions specifically, not Share Extensions, and the usual responder-chain
+// workaround for the latter is unsupported and confirmed not to fire AppDelegate.OpenUrl here.
+// Instead, MainPage polls the same App Group container for a pending link every time it appears
+// (including the app simply being brought back to the foreground) - so the flow is: share here,
+// then switch back to VideoLocalShow, and it picks the link up right then.
 [Register("ShareViewController")]
-public partial class ShareViewController : SLComposeServiceViewController
+public partial class ShareViewController : UIViewController
 {
     private const string AppGroupId = "group.com.videolocalshowapp.videolocalshow";
     private const string SharedUrlKey = "SharedUrl";
@@ -32,21 +36,12 @@ public partial class ShareViewController : SLComposeServiceViewController
     {
         base.ViewDidLoad();
         AppendLog("ViewDidLoad entered (storyboard-based).");
-    }
 
-    // Called by SLComposeServiceViewController as soon as the share sheet's content is ready to
-    // validate - returning true keeps the built-in "Posta" button enabled, which is what
-    // actually triggers DidSelectPost below once the user taps it.
-    public override bool IsContentValid() => true;
+        // No visible UI - the whole point is that sharing feels instant, not a screen to look at.
+        View!.BackgroundColor = UIColor.Clear;
 
-    // Fires once the user taps "Posta" on the built-in compose screen - this is where the
-    // actual hand-off to the main app happens.
-    public override void DidSelectPost()
-    {
         _ = HandleShareAsync();
     }
-
-    public override SLComposeSheetConfigurationItem[] GetConfigurationItems() => [];
 
     private async Task HandleShareAsync()
     {
@@ -61,9 +56,6 @@ public partial class ShareViewController : SLComposeServiceViewController
                 shared.SetString(link, SharedUrlKey);
                 shared.Synchronize();
                 AppendLog("Scritto in App Group.");
-
-                OpenHostApp(this, new NSUrl("videolocalshow://share"));
-                AppendLog("OpenHostApp chiamato.");
             }
         }
         catch (Exception ex)
@@ -74,31 +66,6 @@ public partial class ShareViewController : SLComposeServiceViewController
         {
             ExtensionContext?.CompleteRequest([], null);
         }
-    }
-
-    // Walking the responder chain to find and call the host app's own UIApplication.OpenUrl -
-    // the technique established for Share Extensions in practice, since
-    // UIApplication.SharedApplication is nil in an extension process.
-    private static void OpenHostApp(UIResponder startingFrom, NSUrl url)
-    {
-        UIResponder? responder = startingFrom;
-        while (responder is not null)
-        {
-            if (responder is UIApplication app)
-            {
-#pragma warning disable CA1422 // deprecated in favor of the completion-handler overload, but
-                               // that overload requires a non-null options dictionary and this
-                               // simpler one is the one actually documented to work when called
-                               // this way from within an extension.
-                app.OpenUrl(url);
-#pragma warning restore CA1422
-                return;
-            }
-
-            responder = responder.NextResponder;
-        }
-
-        AppendLog("UIApplication non trovata nella responder chain.");
     }
 
     private async Task<string?> ExtractSharedTextOrUrlAsync()
