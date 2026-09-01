@@ -27,27 +27,50 @@ public class ShareViewController : UIViewController
     {
         base.ViewDidLoad();
 
-        View!.BackgroundColor = UIColor.Black;
-        _statusLabel = new UILabel(new CGRect(20, 60, View.Bounds.Width - 40, 400))
-        {
-            Lines = 0,
-            TextColor = UIColor.White,
-            Font = UIFont.SystemFontOfSize(13),
-            Text = "Avvio..."
-        };
-        View.AddSubview(_statusLabel);
+        // Bright, impossible-to-miss color set before anything else that could throw - if the
+        // extension is crashing before even reaching the diagnostic text below, this red flash
+        // is the one thing that should still be visible to tell that apart from the class never
+        // being invoked by iOS at all (which would show nothing whatsoever, not even a flash).
+        View!.BackgroundColor = UIColor.Red;
 
-        _ = HandleShareAsync();
+        try
+        {
+            _statusLabel = new UILabel(new CGRect(20, 60, View.Bounds.Width - 40, 700))
+            {
+                Lines = 0,
+                TextColor = UIColor.White,
+                Font = UIFont.SystemFontOfSize(13),
+                Text = "Avvio..."
+            };
+            View.AddSubview(_statusLabel);
+
+            _ = HandleShareAsync();
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"ERRORE IN ViewDidLoad: {ex}");
+        }
     }
 
     private void SetStatus(string text)
     {
         InvokeOnMainThread(() =>
         {
-            if (_statusLabel is not null)
+            // Falls back to creating the label here if it never got created above (e.g. that
+            // code itself threw before reaching it) - otherwise an error from that early would
+            // have nothing to report it through, defeating the point of this diagnostic.
+            if (_statusLabel is null)
             {
-                _statusLabel.Text += "\n" + text;
+                _statusLabel = new UILabel(new CGRect(20, 60, View.Bounds.Width - 40, 700))
+                {
+                    Lines = 0,
+                    TextColor = UIColor.White,
+                    Font = UIFont.SystemFontOfSize(13)
+                };
+                View.AddSubview(_statusLabel);
             }
+
+            _statusLabel.Text += "\n" + text;
         });
     }
 
