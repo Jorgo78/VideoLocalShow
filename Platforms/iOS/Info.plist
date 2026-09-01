@@ -42,5 +42,20 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<!-- Custom URL scheme used only to bring this app to the foreground from its own Share
+	     Extension - the extension runs as a separate process and can't call back into this
+	     app's code directly, so it drops the shared link into an App Group container and then
+	     "wakes" the host app via this scheme; AppDelegate.OpenUrl reads it back out from there. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.videolocalshowapp.videolocalshow</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>videolocalshow</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

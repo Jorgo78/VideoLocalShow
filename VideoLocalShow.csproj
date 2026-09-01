@@ -41,12 +41,25 @@
 		<WindowsPackageType>None</WindowsPackageType>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+		<!-- App Group entitlement, shared with the Share Extension - see Entitlements.plist. -->
+		<CodesignEntitlements Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">Platforms\iOS\Entitlements.plist</CodesignEntitlements>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
 		<!-- CommunityToolkit MediaElement, used by the in-app player, requires Android 8.0. -->
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">26.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 	</PropertyGroup>
+
+	<!-- VideoLocalShow.ShareExtension is its own separate project, referenced below - but since
+	     its folder sits inside this project's own directory, the SDK's default globs would
+	     otherwise also compile its files as part of *this* app directly (breaking every
+	     non-iOS target, which has no UIKit/Foundation), on top of it being built and embedded
+	     properly via the project reference. -->
+	<ItemGroup>
+		<Compile Remove="VideoLocalShow.ShareExtension\**" />
+		<None Remove="VideoLocalShow.ShareExtension\**" />
+		<EmbeddedResource Remove="VideoLocalShow.ShareExtension\**" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<!-- App Icon -->
@@ -72,6 +85,13 @@
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="YoutubeExplode" Version="6.6.2" />
+	</ItemGroup>
+
+	<!-- Embeds the Share Extension into this app's own bundle (PlugIns/) at build time - it's
+	     what actually makes "VideoLocalShow" appear in iOS's system "Condividi" sheet from other
+	     apps. iOS-only: the extension project itself only targets net10.0-ios. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<ProjectReference Include="VideoLocalShow.ShareExtension\VideoLocalShow.ShareExtension.csproj" IsAppExtension="true" />
 	</ItemGroup>
 
 </Project>

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0-ios</TargetFramework>
+		<OutputType>Exe</OutputType>
+		<RootNamespace>VideoLocalShow.ShareExtension</RootNamespace>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+
+		<!-- Marks this as an iOS app extension rather than a standalone app - the main app's
+		     project reference below (with IsAppExtension="true") embeds the resulting bundle
+		     into the main app's PlugIns folder at build time. -->
+		<IsAppExtension>true</IsAppExtension>
+
+		<ApplicationId>com.videolocalshowapp.videolocalshow.ShareExtension</ApplicationId>
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+
+		<CodesignEntitlements>Entitlements.plist</CodesignEntitlements>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="Info.plist" />
+	</ItemGroup>
+
+</Project>

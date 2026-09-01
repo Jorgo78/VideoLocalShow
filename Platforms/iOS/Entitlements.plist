@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Shared with the Share Extension so the two processes have a common place to hand a
+	     shared link off - the extension writes it here, the main app (woken via the
+	     videolocalshow:// URL scheme) reads it back out. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.videolocalshowapp.videolocalshow</string>
+	</array>
+</dict>
+</plist>
