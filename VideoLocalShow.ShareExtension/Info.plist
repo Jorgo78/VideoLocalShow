@@ -20,8 +20,19 @@
 		<string>MainInterface</string>
 		<key>NSExtensionAttributes</key>
 		<dict>
+			<!-- TRUEPREDICATE (the community template's own default) builds and archives fine,
+			     but App Store Connect's own upload validation rejects it outright ("Invalid
+			     Info.plist value", error 90362) - back to the same dictionary form that
+			     uploaded successfully before: accepts either an actual URL attachment (e.g.
+			     shared from Safari's address bar) or plain text (how YouTube's own share sheet
+			     hands off a video link). -->
 			<key>NSExtensionActivationRule</key>
-			<string>TRUEPREDICATE</string>
+			<dict>
+				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsText</key>
+				<true/>
+			</dict>
 		</dict>
 	</dict>
 </dict>
