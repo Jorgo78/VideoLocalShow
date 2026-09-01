@@ -91,7 +91,16 @@
 	     what actually makes "VideoLocalShow" appear in iOS's system "Condividi" sheet from other
 	     apps. iOS-only: the extension project itself only targets net10.0-ios. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
-		<ProjectReference Include="VideoLocalShow.ShareExtension\VideoLocalShow.ShareExtension.csproj" IsAppExtension="true" />
+		<!-- AdditionalProperties, not just the extension's own CodesignProvision element:
+		     -p:CodesignProvision on this app's own `dotnet build` command line becomes a
+		     *global* MSBuild property for the whole build, which otherwise wins over what the
+		     referenced extension project sets for itself - it was building with this app's own
+		     provisioning profile (wrong bundle ID) until this explicit per-reference override
+		     was added. -->
+		<ProjectReference
+			Include="VideoLocalShow.ShareExtension\VideoLocalShow.ShareExtension.csproj"
+			IsAppExtension="true"
+			AdditionalProperties="CodesignProvision=VideoLocalShow ShareExtension AppStore" />
 	</ItemGroup>
 
 </Project>
