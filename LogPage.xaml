@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- TEMP DIAGNOSTIC - remove once iOS sharing is confirmed reliably working end to end. -->
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VideoLocalShow.LogPage"
+             Title="Log">
+
+    <Grid Padding="10" RowDefinitions="Auto,*" RowSpacing="8">
+        <HorizontalStackLayout Grid.Row="0" Spacing="8">
+            <Button Text="Aggiorna" Clicked="OnRefreshClicked" />
+            <Button Text="Svuota" Clicked="OnClearClicked" BackgroundColor="{StaticResource AccentRed}" TextColor="White" />
+        </HorizontalStackLayout>
+
+        <ScrollView Grid.Row="1">
+            <Label x:Name="LogLabel" FontFamily="Courier" FontSize="11" LineBreakMode="WordWrap" />
+        </ScrollView>
+    </Grid>
+
+</ContentPage>

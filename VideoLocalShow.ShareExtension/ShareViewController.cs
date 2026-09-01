@@ -27,6 +27,12 @@ public class ShareViewController : UIViewController
     {
         base.ViewDidLoad();
 
+        // The very first thing done here, before anything that could throw - if ViewDidLoad
+        // itself is crashing early, this is the one line with a real chance of still landing in
+        // the persistent log (read afterward from the main app's own "Log" tab, which survives
+        // long after this extension's process and its 6-second on-screen window are gone).
+        AppendLog("ViewDidLoad entered.");
+
         // Bright, impossible-to-miss color set before anything else that could throw - if the
         // extension is crashing before even reaching the diagnostic text below, this red flash
         // is the one thing that should still be visible to tell that apart from the class never
@@ -54,6 +60,8 @@ public class ShareViewController : UIViewController
 
     private void SetStatus(string text)
     {
+        AppendLog(text);
+
         InvokeOnMainThread(() =>
         {
             // Falls back to creating the label here if it never got created above (e.g. that
@@ -72,6 +80,27 @@ public class ShareViewController : UIViewController
 
             _statusLabel.Text += "\n" + text;
         });
+    }
+
+    // Appends straight to the same file the main app's "Log" tab reads (ShareDebugLog.cs), via
+    // the App Group container both processes can see - kept as a small standalone copy here
+    // rather than referencing that class, since this project only targets net10.0-ios while the
+    // main app project targets several platforms.
+    private static void AppendLog(string message)
+    {
+        try
+        {
+            var containerUrl = NSFileManager.DefaultManager.GetContainerUrl(AppGroupId);
+            var path = containerUrl?.AppendPathComponent("sharelog.txt", false).Path;
+            if (path is not null)
+            {
+                File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} {message}\n");
+            }
+        }
+        catch
+        {
+            // Best-effort logging only.
+        }
     }
 
     private async Task HandleShareAsync()

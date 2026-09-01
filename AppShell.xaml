@@ -18,6 +18,12 @@
             Icon="icon_downloads.png"
             ContentTemplate="{DataTemplate local:DownloadsPage}"
             Route="DownloadsPage" />
+
+        <!-- TEMP DIAGNOSTIC tab - remove once iOS sharing is confirmed reliably working end to end. -->
+        <ShellContent
+            Title="Log"
+            ContentTemplate="{DataTemplate local:LogPage}"
+            Route="LogPage" />
     </TabBar>
 
 </Shell>
