@@ -18,6 +18,17 @@
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<CodesignEntitlements>Entitlements.plist</CodesignEntitlements>
+
+		<!-- Hardcoded rather than passed down from the main app's build command: a -p: value
+		     set there becomes a *global* MSBuild property that would apply to this referenced
+		     project too, which is right for CodesignKey (the same distribution certificate
+		     signs both) but wrong for CodesignProvision - the two projects have different
+		     bundle IDs and need their own distinct provisioning profile. Neither of these
+		     values is actually sensitive (both are printed in plain text inside any signed
+		     .ipa), so hardcoding them here is no different from what CI would end up needing a
+		     secret for anyway. -->
+		<CodesignKey>iPhone Distribution: Giorgio Bellante (844CCHUYT5)</CodesignKey>
+		<CodesignProvision>VideoLocalShow ShareExtension AppStore</CodesignProvision>
 	</PropertyGroup>
 
 	<ItemGroup>
