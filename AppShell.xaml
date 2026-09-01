@@ -19,12 +19,15 @@
             ContentTemplate="{DataTemplate local:DownloadsPage}"
             Route="DownloadsPage" />
 
-        <!-- TEMP DIAGNOSTIC tab - remove once iOS sharing is confirmed reliably working end to end. -->
+        <!-- TEMP DIAGNOSTIC tab, hidden for now (sharing is confirmed working) - the underlying
+             LogPage/ShareDebugLog logging is left in place, paused rather than removed, so it
+             can be switched back on quickly by uncommenting this if a new issue needs it.
         <ShellContent
             Title="Log"
             Icon="icon_log.png"
             ContentTemplate="{DataTemplate local:LogPage}"
             Route="LogPage" />
+        -->
 
         <ShellContent
             Title="Info"
