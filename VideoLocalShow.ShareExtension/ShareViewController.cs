@@ -31,19 +31,7 @@ public class ShareViewController : UIViewController
                 var shared = new NSUserDefaults(AppGroupId, NSUserDefaultsType.SuiteName);
                 shared.SetString(link, SharedUrlKey);
                 shared.Synchronize();
-
-                // Asks the system to relay this to the containing app, rather than trying to
-                // reach it directly - an extension process has no way to do that on its own.
-                // OpenUrl is asynchronous and only reports back through its own callback, but
-                // CompleteRequest below tears this extension's process down - calling it right
-                // after firing OpenUrl, without waiting for that callback, risked the process
-                // disappearing before the system had actually finished dispatching the open
-                // request, silently losing it (the sheet would flash and dismiss with the host
-                // app never actually launching - exactly what was happening). A 2s cap is a
-                // safety net in case the callback itself never fires for some reason.
-                var opened = new TaskCompletionSource<bool>();
-                ExtensionContext?.OpenUrl(new NSUrl("videolocalshow://share"), success => opened.TrySetResult(success));
-                await Task.WhenAny(opened.Task, Task.Delay(2000));
+                OpenHostApp(this, new NSUrl("videolocalshow://share"));
             }
         }
         catch
@@ -54,6 +42,35 @@ public class ShareViewController : UIViewController
         finally
         {
             ExtensionContext?.CompleteRequest([], null);
+        }
+    }
+
+    // NSExtensionContext.OpenUrl - the API that looks purpose-built for this - is documented as
+    // being for Today/widget extensions specifically; it did not reliably wake the containing
+    // app when tried here. Walking the responder chain to find and call the host app's own
+    // UIApplication.OpenUrl directly is the technique actually established for Share
+    // Extensions in practice. It's synchronous, so - unlike the previous attempt - there is no
+    // async completion to race against CompleteRequest tearing the extension down afterward.
+    private static void OpenHostApp(UIResponder startingFrom, NSUrl url)
+    {
+        // UIApplication.SharedApplication is exactly what's unavailable here - nil in an
+        // extension process - which is the whole reason this walks up from a live view
+        // controller's own place in the responder chain instead of starting from there.
+        UIResponder? responder = startingFrom;
+        while (responder is not null)
+        {
+            if (responder is UIApplication app)
+            {
+#pragma warning disable CA1422 // deprecated in favor of the completion-handler overload, but
+                               // that overload requires a non-null options dictionary and this
+                               // simpler one is the one actually documented to work when called
+                               // this way from within an extension.
+                app.OpenUrl(url);
+#pragma warning restore CA1422
+                return;
+            }
+
+            responder = responder.NextResponder;
         }
     }
 
