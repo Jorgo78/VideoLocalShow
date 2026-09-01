@@ -45,12 +45,16 @@ public partial class MainPage : ContentPage
 
         if (DeepLinkService.ConsumePendingUrl() is { } pendingUrl)
         {
+            ShareDebugLog.Append($"MainPage.OnAppearing found pending url: {pendingUrl}");
             _ = HandleIncomingLinkAsync(pendingUrl);
         }
     }
 
-    private void OnDeepLinkReceived(string url) =>
+    private void OnDeepLinkReceived(string url)
+    {
+        ShareDebugLog.Append($"MainPage.OnDeepLinkReceived: {url}");
         MainThread.BeginInvokeOnMainThread(() => _ = HandleIncomingLinkAsync(url));
+    }
 
     // A link shared in from another app - YouTube's own "Condividi" sheet, a browser, a chat -
     // skips the manual paste-and-tap step entirely: it runs straight through the same
@@ -60,6 +64,7 @@ public partial class MainPage : ContentPage
     // parsing surprise) would vanish as an unobserved task exception instead of being reported.
     private async Task HandleIncomingLinkAsync(string url)
     {
+        ShareDebugLog.Append($"HandleIncomingLinkAsync entered with: {url}");
         try
         {
             // Some apps' share sheets tack on surrounding text, e.g. "Guarda questo video:
@@ -67,9 +72,11 @@ public partial class MainPage : ContentPage
             // doesn't choke on the rest of the sentence.
             var match = System.Text.RegularExpressions.Regex.Match(url, @"https?://\S+");
             var link = match.Success ? match.Value : url.Trim();
+            ShareDebugLog.Append($"Extracted link: {link}");
 
             if (string.IsNullOrWhiteSpace(link))
             {
+                ShareDebugLog.Append("Link is blank, returning.");
                 return;
             }
 
@@ -95,6 +102,7 @@ public partial class MainPage : ContentPage
         }
         catch (Exception ex)
         {
+            ShareDebugLog.Append($"HandleIncomingLinkAsync EXCEPTION: {ex}");
             ShowStatus($"Impossibile aprire il link condiviso: {ex.Message}");
         }
     }
@@ -106,10 +114,15 @@ public partial class MainPage : ContentPage
             ClearSearchResults();
         }
 
-        if (VideoId.TryParse(link) is not null)
+        var videoId = VideoId.TryParse(link);
+        ShareDebugLog.Append($"VideoId.TryParse result: {videoId?.ToString() ?? "(null - will search instead)"}");
+
+        if (videoId is not null)
         {
             UrlEntry.Text = string.Empty;
+            ShareDebugLog.Append("Calling ResolveAndDownloadAsync...");
             await ResolveAndDownloadAsync(link, titleHint: null);
+            ShareDebugLog.Append("ResolveAndDownloadAsync returned.");
         }
         else
         {

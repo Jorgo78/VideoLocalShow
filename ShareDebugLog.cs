@@ -46,6 +46,27 @@ public static class ShareDebugLog
 #endif
     }
 
+    // Lets the main app add its own entries to the same log the extension writes to, so the
+    // whole flow - extension ran, app woke up, link handed to DeepLinkService, search/download
+    // started - shows up in one place regardless of which tab happens to be open when it does.
+    public static void Append(string message)
+    {
+#if IOS
+        try
+        {
+            var path = LogFilePath;
+            if (path is not null)
+            {
+                File.AppendAllText(path, $"{DateTime.Now:HH:mm:ss.fff} [App] {message}\n");
+            }
+        }
+        catch
+        {
+            // Best-effort logging only.
+        }
+#endif
+    }
+
     public static void Clear()
     {
 #if IOS

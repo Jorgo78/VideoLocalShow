@@ -16,13 +16,20 @@ public class AppDelegate : MauiUIApplicationDelegate
 	// Android's share intent already uses.
 	public override bool OpenUrl(UIApplication app, NSUrl url, NSDictionary options)
 	{
+		// TEMP DIAGNOSTIC - remove once iOS sharing is confirmed reliably working end to end.
+		ShareDebugLog.Append($"AppDelegate.OpenUrl called, scheme={url.Scheme}");
+
 		if (url.Scheme == "videolocalshow")
 		{
 			var shared = new NSUserDefaults("group.com.videolocalshowapp.videolocalshow", NSUserDefaultsType.SuiteName);
-			if (shared.StringForKey("SharedUrl") is { Length: > 0 } sharedUrl)
+			var sharedUrl = shared.StringForKey("SharedUrl");
+			ShareDebugLog.Append($"SharedUrl from App Group: {sharedUrl ?? "(null)"}");
+
+			if (!string.IsNullOrEmpty(sharedUrl))
 			{
 				shared.RemoveObject("SharedUrl");
 				DeepLinkService.Handle(sharedUrl);
+				ShareDebugLog.Append("DeepLinkService.Handle called.");
 			}
 
 			return true;
