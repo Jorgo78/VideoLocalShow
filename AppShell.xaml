@@ -25,6 +25,12 @@
             Icon="icon_log.png"
             ContentTemplate="{DataTemplate local:LogPage}"
             Route="LogPage" />
+
+        <ShellContent
+            Title="Info"
+            Icon="icon_info.png"
+            ContentTemplate="{DataTemplate local:InfoPage}"
+            Route="InfoPage" />
     </TabBar>
 
 </Shell>
