@@ -43,6 +43,25 @@ public partial class MainPage : ContentPage
     {
         base.OnAppearing();
 
+#if IOS
+        // iOS's own rules mean the Share Extension's attempt to wake this app up isn't
+        // reliable - Apple documents NSExtensionContext.OpenUrl as being for Today/widget
+        // extensions specifically, not Share Extensions, and the usual responder-chain
+        // workaround for the latter is unsupported and confirmed not to work here either (the
+        // extension logs its own steps fine, but AppDelegate.OpenUrl never fires afterward).
+        // Polling the same App Group container the extension writes to, every time this page
+        // appears - which includes the app simply being brought back to the foreground, share
+        // sheet or not - means a pending share still gets picked up without needing that
+        // unreliable wake-up to work at all.
+        var sharedDefaults = new Foundation.NSUserDefaults("group.com.videolocalshowapp.videolocalshow", Foundation.NSUserDefaultsType.SuiteName);
+        if (sharedDefaults.StringForKey("SharedUrl") is { Length: > 0 } sharedFromGroup)
+        {
+            sharedDefaults.RemoveObject("SharedUrl");
+            ShareDebugLog.Append($"MainPage.OnAppearing found SharedUrl directly in App Group: {sharedFromGroup}");
+            _ = HandleIncomingLinkAsync(sharedFromGroup);
+        }
+#endif
+
         if (DeepLinkService.ConsumePendingUrl() is { } pendingUrl)
         {
             ShareDebugLog.Append($"MainPage.OnAppearing found pending url: {pendingUrl}");
