@@ -8,8 +8,12 @@
 	<dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.share-services</string>
+		<!-- Must be the fully-namespaced type name, not just the bare class name - with only
+		     "ShareViewController" here, iOS silently fails to resolve the class on a physical
+		     device (this exact symptom: appears in the share sheet, does nothing when tapped) -
+		     even though it happens to still resolve fine in the Simulator without it. -->
 		<key>NSExtensionPrincipalClass</key>
-		<string>ShareViewController</string>
+		<string>VideoLocalShow.ShareExtension.ShareViewController</string>
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<!-- Accepts both an actual URL attachment (e.g. shared from Safari's address bar)

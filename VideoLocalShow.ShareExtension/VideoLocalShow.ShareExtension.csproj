@@ -13,6 +13,13 @@
 		     into the main app's PlugIns folder at build time. -->
 		<IsAppExtension>true</IsAppExtension>
 
+		<!-- Without this, the extension's Objective-C class registration relies on runtime
+		     reflection, which - per multiple other developers hitting this exact symptom -
+		     silently fails to resolve NSExtensionPrincipalClass on a physical device even
+		     though it happens to still work in the Simulator. Static registration bakes the
+		     lookup table in at build time instead, sidestepping that runtime-only gap. -->
+		<Registrar>static</Registrar>
+
 		<ApplicationId>com.videolocalshowapp.videolocalshow.ShareExtension</ApplicationId>
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
