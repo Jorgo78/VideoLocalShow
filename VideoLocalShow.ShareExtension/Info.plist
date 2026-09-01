@@ -8,24 +8,20 @@
 	<dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.share-services</string>
-		<!-- Must be the fully-namespaced type name, not just the bare class name - with only
-		     "ShareViewController" here, iOS silently fails to resolve the class on a physical
-		     device (this exact symptom: appears in the share sheet, does nothing when tapped) -
-		     even though it happens to still resolve fine in the Simulator without it. -->
-		<key>NSExtensionPrincipalClass</key>
-		<string>VideoLocalShow.ShareExtension.ShareViewController</string>
+		<!-- A storyboard entry point, not NSExtensionPrincipalClass pointing straight at the
+		     class: this is the pattern from a verified-working community template
+		     (VladislavAntonyuk/.NET-Templates dotnet-new ios-share-extension). A direct
+		     principal-class reference - tried first, both bare and namespace-qualified - never
+		     actually launched the extension on a physical device (appeared in the share sheet,
+		     tappable, but silently did nothing every time, confirmed via a log file that never
+		     received even its very first line). MainInterface.storyboard's own
+		     customClass="ShareViewController" is what resolves the class instead. -->
+		<key>NSExtensionMainStoryboard</key>
+		<string>MainInterface</string>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<!-- Accepts both an actual URL attachment (e.g. shared from Safari's address bar)
-			     and plain text (how YouTube's own share sheet hands off a video link) - either
-			     is enough to trigger this extension appearing in "Condividi". -->
 			<key>NSExtensionActivationRule</key>
-			<dict>
-				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
-				<integer>1</integer>
-				<key>NSExtensionActivationSupportsText</key>
-				<true/>
-			</dict>
+			<string>TRUEPREDICATE</string>
 		</dict>
 	</dict>
 </dict>

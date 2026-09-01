@@ -2,7 +2,16 @@
 
 	<PropertyGroup>
 		<TargetFramework>net10.0-ios</TargetFramework>
-		<OutputType>Exe</OutputType>
+
+		<!-- Library, not Exe: this is the pattern from a verified-working community template
+		     (VladislavAntonyuk/.NET-Templates dotnet-new ios-share-extension) after this
+		     extension's own storyboard-based entry point (see Info.plist / MainInterface.storyboard)
+		     otherwise never launched on a physical device (it appeared in the share sheet, was
+		     tappable, and simply did nothing - no crash, no UI, nothing logged - every time).
+		     Exe forced an artificial Program.Main stub to exist for no real purpose; Library
+		     needs none. -->
+		<OutputType>Library</OutputType>
+
 		<RootNamespace>VideoLocalShow.ShareExtension</RootNamespace>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -12,12 +21,11 @@
 		     project reference below (with IsAppExtension="true") embeds the resulting bundle
 		     into the main app's PlugIns folder at build time. -->
 		<IsAppExtension>true</IsAppExtension>
+		<IsWatchExtension>false</IsWatchExtension>
 
-		<!-- Without this, the extension's Objective-C class registration relies on runtime
-		     reflection, which - per multiple other developers hitting this exact symptom -
-		     silently fails to resolve NSExtensionPrincipalClass on a physical device even
-		     though it happens to still work in the Simulator. Static registration bakes the
-		     lookup table in at build time instead, sidestepping that runtime-only gap. -->
+		<!-- Also part of the same verified template's configuration - static registration
+		     bakes the Objective-C class lookup table in at build time rather than relying on
+		     runtime reflection. -->
 		<Registrar>static</Registrar>
 
 		<ApplicationId>com.videolocalshowapp.videolocalshow.ShareExtension</ApplicationId>
@@ -37,9 +45,5 @@
 		<CodesignKey>iPhone Distribution: Giorgio Bellante (844CCHUYT5)</CodesignKey>
 		<CodesignProvision>VideoLocalShow ShareExtension AppStore</CodesignProvision>
 	</PropertyGroup>
-
-	<ItemGroup>
-		<None Include="Info.plist" />
-	</ItemGroup>
 
 </Project>
