@@ -1,3 +1,4 @@
+using CoreGraphics;
 using Foundation;
 using UIKit;
 
@@ -15,34 +16,70 @@ public class ShareViewController : UIViewController
     private const string AppGroupId = "group.com.videolocalshowapp.videolocalshow";
     private const string SharedUrlKey = "SharedUrl";
 
+    // TEMP DIAGNOSTIC - remove once sharing is confirmed reliably working end to end. Two
+    // separate open attempts silently produced no observable difference, which points at the
+    // failure being further upstream (extraction, or a swallowed exception) rather than in
+    // either open mechanism - showing status directly on this screen, instead of relying on a
+    // successful app-open to ever happen, is the fastest way to actually see what's going on.
+    private UILabel? _statusLabel;
+
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
+
+        View!.BackgroundColor = UIColor.Black;
+        _statusLabel = new UILabel(new CGRect(20, 60, View.Bounds.Width - 40, 400))
+        {
+            Lines = 0,
+            TextColor = UIColor.White,
+            Font = UIFont.SystemFontOfSize(13),
+            Text = "Avvio..."
+        };
+        View.AddSubview(_statusLabel);
+
         _ = HandleShareAsync();
+    }
+
+    private void SetStatus(string text)
+    {
+        InvokeOnMainThread(() =>
+        {
+            if (_statusLabel is not null)
+            {
+                _statusLabel.Text += "\n" + text;
+            }
+        });
     }
 
     private async Task HandleShareAsync()
     {
         try
         {
+            SetStatus($"InputItems: {ExtensionContext?.InputItems?.Length ?? -1}");
+
             var link = await ExtractSharedTextOrUrlAsync();
+            SetStatus($"Link estratto: {link ?? "(nessuno)"}");
+
             if (!string.IsNullOrWhiteSpace(link))
             {
                 var shared = new NSUserDefaults(AppGroupId, NSUserDefaultsType.SuiteName);
                 shared.SetString(link, SharedUrlKey);
                 shared.Synchronize();
+                SetStatus("Scritto in App Group.");
+
                 OpenHostApp(this, new NSUrl("videolocalshow://share"));
+                SetStatus("OpenHostApp chiamato.");
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // A share that can't be parsed just closes the sheet quietly below, rather than
-            // leaving the user stuck looking at a blank extension screen.
+            SetStatus($"ERRORE: {ex}");
         }
-        finally
-        {
-            ExtensionContext?.CompleteRequest([], null);
-        }
+
+        // Held open for a few seconds instead of completing immediately, purely so the status
+        // text above has time to actually be read - not the final behavior.
+        await Task.Delay(6000);
+        ExtensionContext?.CompleteRequest([], null);
     }
 
     // NSExtensionContext.OpenUrl - the API that looks purpose-built for this - is documented as
@@ -51,16 +88,19 @@ public class ShareViewController : UIViewController
     // UIApplication.OpenUrl directly is the technique actually established for Share
     // Extensions in practice. It's synchronous, so - unlike the previous attempt - there is no
     // async completion to race against CompleteRequest tearing the extension down afterward.
-    private static void OpenHostApp(UIResponder startingFrom, NSUrl url)
+    private void OpenHostApp(UIResponder startingFrom, NSUrl url)
     {
         // UIApplication.SharedApplication is exactly what's unavailable here - nil in an
         // extension process - which is the whole reason this walks up from a live view
         // controller's own place in the responder chain instead of starting from there.
         UIResponder? responder = startingFrom;
+        var depth = 0;
         while (responder is not null)
         {
+            depth++;
             if (responder is UIApplication app)
             {
+                SetStatus($"UIApplication trovata a profondità {depth}.");
 #pragma warning disable CA1422 // deprecated in favor of the completion-handler overload, but
                                // that overload requires a non-null options dictionary and this
                                // simpler one is the one actually documented to work when called
@@ -72,6 +112,8 @@ public class ShareViewController : UIViewController
 
             responder = responder.NextResponder;
         }
+
+        SetStatus($"UIApplication NON trovata (profondità esplorata: {depth}).");
     }
 
     private async Task<string?> ExtractSharedTextOrUrlAsync()
@@ -91,6 +133,9 @@ public class ShareViewController : UIViewController
 
             foreach (var attachment in item.Attachments)
             {
+                var types = string.Join(", ", attachment.RegisteredTypeIdentifiers ?? []);
+                SetStatus($"Attachment tipi: {types}");
+
                 if (attachment.HasItemConformingTo("public.url"))
                 {
                     var loaded = await attachment.LoadItemAsync("public.url", null);
