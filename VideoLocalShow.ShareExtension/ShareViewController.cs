@@ -12,13 +12,12 @@ namespace VideoLocalShow.ShareExtension;
 //
 // The extension runs in its own separate, sandboxed process from the main app - there is no
 // direct way to call into the main app's code from here - so the hand-off goes through an App
-// Group container both processes can see. Waking the main app immediately from here turned out
-// to not be reliably possible either - Apple documents NSExtensionContext.OpenUrl as being for
-// Today/widget extensions specifically, not Share Extensions, and the usual responder-chain
-// workaround for the latter is unsupported and confirmed not to fire AppDelegate.OpenUrl here.
-// Instead, MainPage polls the same App Group container for a pending link every time it appears
-// (including the app simply being brought back to the foreground) - so the flow is: share here,
-// then switch back to VideoLocalShow, and it picks the link up right then.
+// Group container both processes can see. Waking the main app from here is best effort only -
+// Apple documents NSExtensionContext.OpenUrl as being for Today/widget extensions specifically,
+// not Share Extensions (see OpenHostApp below for what is tried instead). Whether or not that
+// wake-up works, MainPage also polls the same App Group container for a pending link every time
+// it appears (including the app simply being brought back to the foreground) - so the worst
+// case is: share here, then switch back to VideoLocalShow, and it picks the link up right then.
 [Register("ShareViewController")]
 public partial class ShareViewController : UIViewController
 {
@@ -56,6 +55,11 @@ public partial class ShareViewController : UIViewController
                 shared.SetString(link, SharedUrlKey);
                 shared.Synchronize();
                 AppendLog("Scritto in App Group.");
+
+                // Best effort: if this brings the app to the front, AppDelegate.OpenUrl picks the
+                // link up straight away; if not, MainPage still finds it when next opened.
+                var opened = OpenHostApp(this, new NSUrl("videolocalshow://share"));
+                AppendLog($"OpenHostApp: {(opened ? "richiesta inviata" : "UIApplication non trovata")}");
             }
         }
         catch (Exception ex)
@@ -67,6 +71,38 @@ public partial class ShareViewController : UIViewController
             ExtensionContext?.CompleteRequest([], null);
         }
     }
+
+    // Asks the host app's UIApplication to open our own URL scheme, which launches/foregrounds
+    // VideoLocalShow. NSExtensionContext.OpenUrl is only honoured for Today/widget extensions,
+    // and the older UIApplication.openURL: that an earlier attempt called is a silent no-op on
+    // iOS 18+. What still works there is the newer openURL:options:completionHandler:, reached
+    // by walking up the responder chain to the host's UIApplication (UIApplication.SharedApplication
+    // is unavailable inside an extension) and sending that message directly - the C# binding for
+    // it can't be used because it is marked unavailable to extensions. This relies on behaviour
+    // Apple doesn't officially document for Share Extensions, so it may stop working in a future
+    // iOS release; the App Group hand-off above is what keeps sharing working regardless.
+    private static bool OpenHostApp(UIResponder startingFrom, NSUrl url)
+    {
+        var selector = ObjCRuntime.Selector.GetHandle("openURL:options:completionHandler:");
+
+        UIResponder? responder = startingFrom;
+        while (responder is not null)
+        {
+            if (responder is UIApplication app)
+            {
+                using var options = new NSDictionary();
+                SendOpenUrl(app.Handle, selector, url.Handle, options.Handle, IntPtr.Zero);
+                return true;
+            }
+
+            responder = responder.NextResponder;
+        }
+
+        return false;
+    }
+
+    [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.dylib", EntryPoint = "objc_msgSend")]
+    private static extern void SendOpenUrl(IntPtr receiver, IntPtr selector, IntPtr url, IntPtr options, IntPtr completionHandler);
 
     private async Task<string?> ExtractSharedTextOrUrlAsync()
     {
