@@ -18,6 +18,15 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      # macos-latest now defaults to a newer Xcode (26.6) than the one the installed .NET for
+      # iOS workload pack (26.0.x) supports - it refuses to build ("requires Xcode 26.0").
+      # Pin the matching Xcode instead of relying on the runner's default. Revisit this when
+      # the iOS workload is updated to a newer pack.
+      - name: Select Xcode 26.0
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.0.app
+          xcodebuild -version
+
       - name: Install MAUI iOS workload
         run: dotnet workload install maui-ios
 
