@@ -62,5 +62,26 @@
 			</array>
 		</dict>
 	</array>
+	<!-- UIKit scene lifecycle, required for apps built with the iOS 27 SDK (they crash at launch
+	     on iOS 27 without it). The configuration name is the one MAUI's own app delegate hands
+	     out for its main window, and the delegate class is Platforms/iOS/SceneDelegate.cs,
+	     found by its [Register] name. One window only: this is a single-screen app. -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>__MAUI_DEFAULT_SCENE_CONFIGURATION__</string>
+					<key>UISceneDelegateClassName</key>
+					<string>SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 </dict>
 </plist>
