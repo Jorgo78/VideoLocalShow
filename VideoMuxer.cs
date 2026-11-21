@@ -143,8 +143,14 @@ public static class VideoMuxer
 
     private static async Task MuxAppleAsync(string videoPath, string audioPath, string outputPath, CancellationToken cancellationToken)
     {
-        using var videoAsset = new AVUrlAsset(NSUrl.FromFilename(videoPath));
-        using var audioAsset = new AVUrlAsset(NSUrl.FromFilename(audioPath));
+        // YouTube's MP4 streams are fragmented, and for those AVFoundation by default only
+        // *estimates* the duration (and track time ranges) rather than reading it from the file.
+        // The estimate can be far off - here it came out at double the real length, so the merged
+        // file ran twice as long with the second half black. Asking for precise duration and
+        // timing makes it scan the whole file for the true figures first.
+        var preciseTiming = new AVUrlAssetOptions { PreferPreciseDurationAndTiming = true };
+        using var videoAsset = new AVUrlAsset(NSUrl.FromFilename(videoPath), preciseTiming);
+        using var audioAsset = new AVUrlAsset(NSUrl.FromFilename(audioPath), preciseTiming);
 
         var videoTracks = await videoAsset.LoadTracksWithMediaTypeAsync(VideoMediaType);
         var audioTracks = await audioAsset.LoadTracksWithMediaTypeAsync(AudioMediaType);
