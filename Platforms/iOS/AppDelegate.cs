@@ -8,6 +8,17 @@ public class AppDelegate : MauiUIApplicationDelegate
 {
 	protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
 
+	// iOS only keeps audio playing in the background (and honours the silent switch the way a
+	// media player should) for an audio session in the Playback category - the default category
+	// is silenced as soon as the app leaves the screen. Only the category is set here, not the
+	// session activated, so launching the app doesn't interrupt music playing in another app;
+	// the player activates the session itself when playback actually starts.
+	public override bool FinishedLaunching(UIApplication application, NSDictionary launchOptions)
+	{
+		AVFoundation.AVAudioSession.SharedInstance().SetCategory(AVFoundation.AVAudioSessionCategory.Playback, out _);
+		return base.FinishedLaunching(application, launchOptions);
+	}
+
 	// The Share Extension runs as its own separate process (a `.appex`, sandboxed apart from
 	// this app) - it can't call into DeepLinkService directly, so it drops the shared link into
 	// an App Group container the two share, then "wakes" this app via its own private URL

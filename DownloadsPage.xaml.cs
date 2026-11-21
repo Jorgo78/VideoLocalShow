@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Maui.Views;
 using VideoLocalShow.Models;
 
@@ -5,8 +6,11 @@ namespace VideoLocalShow;
 
 public partial class DownloadsPage : ContentPage
 {
-    private List<DownloadedFile> _files = [];
+    // An ObservableCollection so a row moved in reorder mode slides to its new place in the list
+    // instead of the whole list being rebuilt. Its order is also the playback order.
+    private ObservableCollection<DownloadedFile> _files = [];
     private bool _isSelectionMode;
+    private bool _isReorderMode;
     private DownloadedFile? _previewFile;
     private CancellationTokenSource? _rotationDebounceCts;
 
@@ -44,25 +48,65 @@ public partial class DownloadsPage : ContentPage
         // straight on the UI thread, so opening this tab froze for however long that scan took,
         // worse the more files there were to look at. A background thread keeps the tab
         // responsive regardless of how large the folder has grown.
-        var files = await Task.Run(() => Directory.EnumerateFiles(folder)
-            .Select(path => new FileInfo(path))
-            .OrderByDescending(info => info.LastWriteTimeUtc)
+        var files = await Task.Run(() => DownloadOrderStore.Apply(
+                Directory.EnumerateFiles(folder).Select(path => new FileInfo(path)),
+                info => info.Name,
+                info => info.LastWriteTimeUtc)
             .Select(info => new DownloadedFile
             {
                 FilePath = info.FullName,
                 FileName = info.Name,
                 Details = $"{FormatSize(info.Length)} · {info.LastWriteTime:g}",
                 PlayCommand = new Command<DownloadedFile>(async f => await PlayAsync(f!)),
-                IsSelectionMode = _isSelectionMode
+                MoveUpCommand = new Command<DownloadedFile>(f => MoveFile(f!, -1)),
+                MoveDownCommand = new Command<DownloadedFile>(f => MoveFile(f!, +1)),
+                IsSelectionMode = _isSelectionMode,
+                IsReorderMode = _isReorderMode
             })
             .ToList());
 
-        _files = files;
+        _files = new ObservableCollection<DownloadedFile>(files);
         DownloadsList.ItemsSource = _files;
         EmptyLabel.IsVisible = _files.Count == 0;
         UpdateDeleteSelectedButton();
 
-        _ = LoadThumbnailsAsync(_files);
+        _ = LoadThumbnailsAsync(files);
+    }
+
+    /// <summary>
+    /// Toggles reorder mode, where each row shows up/down arrows instead of its play button. The
+    /// order set here is saved, and is the order the files play back in.
+    /// </summary>
+    private void OnToggleReorderModeClicked(object? sender, EventArgs e) => SetReorderMode(!_isReorderMode);
+
+    private void SetReorderMode(bool enabled)
+    {
+        _isReorderMode = enabled;
+        ReorderToolbarItem.Text = enabled ? "Fine riordino" : "Riordina";
+
+        foreach (var file in _files)
+        {
+            file.IsReorderMode = enabled;
+        }
+
+        // Reorder and multi-select swap the same row controls around, so only one at a time.
+        if (enabled && _isSelectionMode)
+        {
+            OnToggleSelectionModeClicked(null, EventArgs.Empty);
+        }
+    }
+
+    private void MoveFile(DownloadedFile file, int offset)
+    {
+        var index = _files.IndexOf(file);
+        var target = index + offset;
+        if (index < 0 || target < 0 || target >= _files.Count)
+        {
+            return;
+        }
+
+        _files.Move(index, target);
+        DownloadOrderStore.Save(_files.Select(f => f.FileName));
     }
 
     /// <summary>
@@ -73,6 +117,11 @@ public partial class DownloadsPage : ContentPage
     {
         _isSelectionMode = !_isSelectionMode;
         SelectionToolbarItem.Text = _isSelectionMode ? "Annulla" : "Seleziona";
+
+        if (_isSelectionMode && _isReorderMode)
+        {
+            SetReorderMode(false);
+        }
 
         foreach (var file in _files)
         {
@@ -134,7 +183,7 @@ public partial class DownloadsPage : ContentPage
     // a lot of downloads would fire off just as many decodes at once and thrash instead of help.
     private const int MaxConcurrentThumbnailLoads = 4;
 
-    private static async Task LoadThumbnailsAsync(List<DownloadedFile> files)
+    private static async Task LoadThumbnailsAsync(IReadOnlyList<DownloadedFile> files)
     {
         using var throttle = new SemaphoreSlim(MaxConcurrentThumbnailLoads);
 
@@ -160,10 +209,35 @@ public partial class DownloadsPage : ContentPage
     // full player - a quick look without leaving the list. Rotating the device to landscape
     // while it's open expands it in place to fill the page - see SetPreviewFullscreen - and
     // rotating back to portrait shrinks it back down, without ever navigating to another page.
+    //
+    // Playback runs through the files in list order: when one ends, the next one in the list
+    // starts (see OnPreviewMediaEnded), and the previous/next buttons in the preview's header
+    // jump along the same list. The list order is whatever the user arranged in reorder mode.
     private Task PlayAsync(DownloadedFile file)
     {
+        StartPlayback(file);
+        return Task.CompletedTask;
+    }
+
+    private void StartPlayback(DownloadedFile file)
+    {
+        if (_previewFile is not null)
+        {
+            _previewFile.IsNowPlaying = false;
+        }
+
         _previewFile = file;
+        file.IsNowPlaying = true;
         PreviewTitleLabel.Text = file.FileName;
+
+        // Shown on the lock screen / notification (and by the headset controls) while playing in
+        // the background.
+        PreviewPlayer.MetadataTitle = Path.GetFileNameWithoutExtension(file.FileName);
+        PreviewPlayer.MetadataArtist = "VideoLocalShow";
+
+        // Only the first file of a run needs the rotation hook and the permission prompt -
+        // moving on to the next file leaves the preview open as it was.
+        var isFirstOfRun = !PreviewContainer.IsVisible;
 
         // Order matters here: the player's native surface only binds correctly once it's part
         // of the visible tree, so IsVisible has to flip on before Source is assigned - the other
@@ -172,8 +246,95 @@ public partial class DownloadsPage : ContentPage
         PreviewContainer.IsVisible = true;
         PreviewPlayer.Source = MediaSource.FromFile(file.FilePath);
 
-        DeviceDisplay.Current.MainDisplayInfoChanged += OnDisplayInfoChanged;
-        return Task.CompletedTask;
+        if (isFirstOfRun)
+        {
+            DeviceDisplay.Current.MainDisplayInfoChanged += OnDisplayInfoChanged;
+#if ANDROID
+            _ = EnsureNotificationPermissionAsync();
+#endif
+        }
+    }
+
+#if ANDROID
+    // Android 13+ shows the media-playback notification (the thing that keeps playback alive in
+    // the background and carries its controls) only once this permission is granted. Playback
+    // itself works without it, so a refusal is not an error.
+    private static async Task EnsureNotificationPermissionAsync()
+    {
+        try
+        {
+            if (await Permissions.CheckStatusAsync<Permissions.PostNotifications>() != PermissionStatus.Granted)
+            {
+                await Permissions.RequestAsync<Permissions.PostNotifications>();
+            }
+        }
+        catch (Exception)
+        {
+            // Best effort only.
+        }
+    }
+#endif
+
+    private void OnPlayAllClicked(object? sender, EventArgs e)
+    {
+        if (_files.Count == 0)
+        {
+            return;
+        }
+
+        // Selecting or reordering rows and starting playback at once would be confusing.
+        if (_isReorderMode)
+        {
+            SetReorderMode(false);
+        }
+
+        StartPlayback(_files[0]);
+    }
+
+    private void OnPreviewPreviousClicked(object? sender, EventArgs e) => PlayRelative(-1);
+
+    private void OnPreviewNextClicked(object? sender, EventArgs e) => PlayRelative(+1);
+
+    // Fires when the current file plays to its end. MediaEnded may arrive on a background thread.
+    private void OnPreviewMediaEnded(object? sender, EventArgs e) =>
+        MainThread.BeginInvokeOnMainThread(() => PlayRelative(+1, closeAtEnd: true));
+
+    private void PlayRelative(int offset, bool closeAtEnd = false)
+    {
+        if (_previewFile is null)
+        {
+            return;
+        }
+
+        var index = IndexOfPreviewFile();
+        var target = index + offset;
+        if (index < 0 || target < 0 || target >= _files.Count)
+        {
+            // Past the last file at the end of the sequence: nothing left to play.
+            if (closeAtEnd)
+            {
+                ClosePreview();
+            }
+
+            return;
+        }
+
+        StartPlayback(_files[target]);
+    }
+
+    // By path rather than by object reference: pulling to refresh rebuilds every row while the
+    // preview keeps playing, so the file being played may not be one of the current row objects.
+    private int IndexOfPreviewFile()
+    {
+        for (var i = 0; i < _files.Count; i++)
+        {
+            if (_files[i].FilePath == _previewFile?.FilePath)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private void OnPreviewCloseClicked(object? sender, EventArgs e) => ClosePreview();
@@ -237,6 +398,11 @@ public partial class DownloadsPage : ContentPage
         PreviewPlayer.Stop();
         PreviewContainer.IsVisible = false;
         PreviewPlayer.Source = null;
+        if (_previewFile is not null)
+        {
+            _previewFile.IsNowPlaying = false;
+        }
+
         _previewFile = null;
     }
 

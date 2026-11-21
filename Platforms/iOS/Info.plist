@@ -10,6 +10,11 @@
 	     upload. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Lets audio keep playing when the app goes to the background or the screen locks. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<!-- The app itself never uses Bluetooth, but Apple's validator flags the Bluetooth API
 	     symbols referenced by a linked third-party library (media/networking dependencies
 	     commonly pull these in even when unused) and requires a purpose string to exist
