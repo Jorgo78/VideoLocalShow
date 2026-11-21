@@ -11,7 +11,7 @@
         <ToolbarItem x:Name="SelectionToolbarItem" Text="Seleziona" Clicked="OnToggleSelectionModeClicked" Order="Primary" Priority="0" />
     </ContentPage.ToolbarItems>
 
-    <Grid Padding="10,8,10,0" RowDefinitions="Auto,*,Auto" RowSpacing="4">
+    <Grid x:Name="RootGrid" Padding="10,8,10,0" RowDefinitions="Auto,*,Auto" RowSpacing="4">
 
         <Label
             x:Name="EmptyLabel"
@@ -170,7 +170,7 @@
                     WidthRequest="34"
                     HeightRequest="34"
                     CornerRadius="17"
-                    BackgroundColor="#66000000"
+                    BackgroundColor="#99404040"
                     TextColor="{StaticResource PrimaryDark}"
                     SemanticProperties.Description="Video precedente"
                     Clicked="OnPreviewPreviousClicked" />
@@ -182,7 +182,7 @@
                     WidthRequest="34"
                     HeightRequest="34"
                     CornerRadius="17"
-                    BackgroundColor="#66000000"
+                    BackgroundColor="#99404040"
                     TextColor="{StaticResource PrimaryDark}"
                     SemanticProperties.Description="Video successivo"
                     Clicked="OnPreviewNextClicked" />
@@ -194,7 +194,7 @@
                     WidthRequest="34"
                     HeightRequest="34"
                     CornerRadius="17"
-                    BackgroundColor="#66000000"
+                    BackgroundColor="#99404040"
                     TextColor="{StaticResource PrimaryDark}"
                     SemanticProperties.Description="Chiudi anteprima"
                     Clicked="OnPreviewCloseClicked" />

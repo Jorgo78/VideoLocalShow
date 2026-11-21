@@ -16,11 +16,18 @@ namespace VideoLocalShow;
 /// </summary>
 public static class FullScreenMode
 {
-    public static void Enable() => Apply(fullScreen: true);
+    public static void Enable() => Apply(fullScreen: true, lockOrientation: true);
 
-    public static void Disable() => Apply(fullScreen: false);
+    public static void Disable() => Apply(fullScreen: false, lockOrientation: true);
 
-    private static void Apply(bool fullScreen)
+    /// <summary>
+    /// Hides (or brings back) just the system bars and lets content draw under the display
+    /// cutout, leaving the screen orientation alone - for a view that goes full screen on its own
+    /// when the device is turned, and must stay free to turn back.
+    /// </summary>
+    public static void SetSystemBarsHidden(bool hidden) => Apply(hidden, lockOrientation: false);
+
+    private static void Apply(bool fullScreen, bool lockOrientation)
     {
 #if ANDROID
         MainThread.BeginInvokeOnMainThread(() =>
@@ -32,9 +39,12 @@ public static class FullScreenMode
                 return;
             }
 
-            activity.RequestedOrientation = fullScreen
-                ? ScreenOrientation.SensorLandscape
-                : ScreenOrientation.Portrait;
+            if (lockOrientation)
+            {
+                activity.RequestedOrientation = fullScreen
+                    ? ScreenOrientation.SensorLandscape
+                    : ScreenOrientation.Portrait;
+            }
 
             if (OperatingSystem.IsAndroidVersionAtLeast(30))
             {
@@ -55,7 +65,7 @@ public static class FullScreenMode
     public static void Reapply()
     {
 #if ANDROID
-        Apply(fullScreen: true);
+        Apply(fullScreen: true, lockOrientation: true);
 #endif
     }
 
@@ -69,6 +79,16 @@ public static class FullScreenMode
 #pragma warning disable CA1422
         window.SetDecorFitsSystemWindows(!fullScreen);
 #pragma warning restore CA1422
+
+        // Without this the video stops short of the camera cutout, leaving a strip beside it even
+        // with the system bars hidden.
+        if (window.Attributes is { } attributes)
+        {
+            attributes.LayoutInDisplayCutoutMode = fullScreen
+                ? LayoutInDisplayCutoutMode.ShortEdges
+                : LayoutInDisplayCutoutMode.Default;
+            window.Attributes = attributes;
+        }
 
         var controller = window.InsetsController;
         if (controller is null)

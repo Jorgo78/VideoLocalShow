@@ -11,6 +11,11 @@ public partial class DownloadsPage : ContentPage
     private ObservableCollection<DownloadedFile> _files = [];
     private bool _isSelectionMode;
     private DownloadedFile? _draggingFile;
+    private Thickness _normalRootPadding;
+    private SafeAreaEdges _normalSafeAreaEdges;
+#if IOS
+    private bool _normalUsesSafeArea;
+#endif
     private bool _dragTrackerAttached;
     private DownloadedFile? _previewFile;
     private CancellationTokenSource? _rotationDebounceCts;
@@ -18,6 +23,14 @@ public partial class DownloadsPage : ContentPage
     public DownloadsPage()
     {
         InitializeComponent();
+
+        // What the page looks like outside full screen, to put back afterwards.
+        _normalRootPadding = RootGrid.Padding;
+        _normalSafeAreaEdges = RootGrid.SafeAreaEdges;
+#if IOS
+        _normalUsesSafeArea = Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.GetUseSafeArea(this);
+#endif
+
         DownloadsList.HandlerChanged += OnDownloadsListHandlerChanged;
         SizeChanged += OnPageSizeChanged;
     }
@@ -456,12 +469,33 @@ public partial class DownloadsPage : ContentPage
     // page underneath it, never stop being exactly where they were.
     private void SetPreviewFullscreen(bool fullscreen)
     {
+        var changed = fullscreen != _isPreviewFullscreen;
         _isPreviewFullscreen = fullscreen;
         Grid.SetRowSpan(PreviewContainer, fullscreen ? 3 : 1);
         PreviewContainer.HeightRequest = fullscreen ? -1 : 210;
         PreviewContainer.Margin = fullscreen ? new Thickness(0) : new Thickness(0, 0, 0, 12);
         Shell.SetNavBarIsVisible(this, !fullscreen);
         Shell.SetTabBarIsVisible(this, !fullscreen);
+
+        if (!changed)
+        {
+            return;
+        }
+
+        // The real thing: no page padding, content allowed under the notch and the bars, and the
+        // system bars (status bar, navigation buttons / home indicator) hidden.
+        RootGrid.Padding = fullscreen ? new Thickness(0) : _normalRootPadding;
+        RootGrid.SafeAreaEdges = fullscreen ? SafeAreaEdges.None : _normalSafeAreaEdges;
+        FullScreenMode.SetSystemBarsHidden(fullscreen);
+#if IOS
+        Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.SetUseSafeArea(this, fullscreen ? false : _normalUsesSafeArea);
+        Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.SetPrefersStatusBarHidden(
+            this,
+            fullscreen
+                ? Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.StatusBarHiddenMode.True
+                : Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.StatusBarHiddenMode.Default);
+        Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.SetPrefersHomeIndicatorAutoHidden(this, fullscreen);
+#endif
     }
 
     private void ClosePreview()
