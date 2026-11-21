@@ -19,9 +19,6 @@ public class DownloadedFile : INotifyPropertyChanged
 
     public required ICommand PlayCommand { get; init; }
 
-    /// <summary>Rows can be dragged to a new place in the list, except while multi-select is on -
-    /// there a press on a row has to mean "tick it", not "pick it up".</summary>
-    public bool CanReorder => !IsSelectionMode;
 
     /// <summary>True for the row currently playing in the preview, so the list shows where the
     /// sequence has got to.</summary>
@@ -58,7 +55,6 @@ public class DownloadedFile : INotifyPropertyChanged
             _isSelectionMode = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ShowRowActions));
-            OnPropertyChanged(nameof(CanReorder));
         }
     }
 

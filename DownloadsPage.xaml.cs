@@ -6,14 +6,10 @@ namespace VideoLocalShow;
 
 public partial class DownloadsPage : ContentPage
 {
-    // An ObservableCollection so a row dragged to a new place slides there instead of the whole
-    // list being rebuilt. Its order is also the playback order.
+    // An ObservableCollection: the CollectionView's own drag-to-reorder moves items inside the
+    // bound collection, so it has to be one it can modify. Its order is also the playback order.
     private ObservableCollection<DownloadedFile> _files = [];
     private bool _isSelectionMode;
-    private DownloadedFile? _draggedFile;
-    private int _firstVisibleIndex;
-    private int _lastVisibleIndex;
-    private DateTime _lastDragAutoScrollUtc;
     private DownloadedFile? _previewFile;
     private CancellationTokenSource? _rotationDebounceCts;
 
@@ -73,85 +69,10 @@ public partial class DownloadsPage : ContentPage
         _ = LoadThumbnailsAsync(files);
     }
 
-    // --- Drag and drop reordering ---------------------------------------------------------------
-    // Press and hold a row, drag it over another one and let go: the dragged row takes that
-    // row's place. The new order is saved, and it is the order the files play back in.
-
-    private void OnRowDragStarting(object? sender, DragStartingEventArgs e)
-    {
-        _draggedFile = (sender as DragGestureRecognizer)?.Parent?.BindingContext as DownloadedFile;
-        if (_draggedFile is null)
-        {
-            e.Cancel = true;
-            return;
-        }
-
-        // The dragged row is tracked in _draggedFile; the payload only has to exist, since some
-        // platforms refuse to start a drag with an empty one.
-        e.Data.Text = _draggedFile.FileName;
-    }
-
-    private void OnRowDropCompleted(object? sender, DropCompletedEventArgs e) => _draggedFile = null;
-
-    private void OnRowDragOver(object? sender, DragEventArgs e)
-    {
-        e.AcceptedOperation = DataPackageOperation.Copy;
-        ScrollListWhileDragging(e);
-    }
-
-    private void OnRowDrop(object? sender, DropEventArgs e)
-    {
-        var target = (sender as DropGestureRecognizer)?.Parent?.BindingContext as DownloadedFile;
-        var dragged = _draggedFile;
-        _draggedFile = null;
-
-        if (dragged is null || target is null || ReferenceEquals(dragged, target))
-        {
-            return;
-        }
-
-        var from = _files.IndexOf(dragged);
-        var to = _files.IndexOf(target);
-        if (from < 0 || to < 0)
-        {
-            return;
-        }
-
-        _files.Move(from, to);
+    // Fires once a row has been dragged to its new place (the CollectionView has already moved
+    // it in _files by then): save the order, which is also the order the files play back in.
+    private void OnReorderCompleted(object? sender, EventArgs e) =>
         DownloadOrderStore.Save(_files.Select(f => f.FileName));
-    }
-
-    private void OnDownloadsScrolled(object? sender, ItemsViewScrolledEventArgs e)
-    {
-        _firstVisibleIndex = e.FirstVisibleItemIndex;
-        _lastVisibleIndex = e.LastVisibleItemIndex;
-    }
-
-    // The list doesn't scroll by itself while a row is being dragged, so without this a row could
-    // only be moved as far as the screen currently shows. Holding it near the top or bottom edge
-    // scrolls the list a row at a time, throttled so it moves at a followable speed.
-    private void ScrollListWhileDragging(DragEventArgs e)
-    {
-        const double edgeZone = 90;
-        const int minMillisecondsBetweenScrolls = 350;
-
-        if (e.GetPosition(DownloadsRefreshView) is not { } position ||
-            (DateTime.UtcNow - _lastDragAutoScrollUtc).TotalMilliseconds < minMillisecondsBetweenScrolls)
-        {
-            return;
-        }
-
-        if (position.Y < edgeZone && _firstVisibleIndex > 0)
-        {
-            _lastDragAutoScrollUtc = DateTime.UtcNow;
-            DownloadsList.ScrollTo(_firstVisibleIndex - 1, position: ScrollToPosition.MakeVisible, animate: true);
-        }
-        else if (position.Y > DownloadsRefreshView.Height - edgeZone && _lastVisibleIndex < _files.Count - 1)
-        {
-            _lastDragAutoScrollUtc = DateTime.UtcNow;
-            DownloadsList.ScrollTo(_lastVisibleIndex + 1, position: ScrollToPosition.MakeVisible, animate: true);
-        }
-    }
 
     /// <summary>
     /// Toggles between the normal per-row play/delete controls and a multi-select mode where
@@ -161,6 +82,9 @@ public partial class DownloadsPage : ContentPage
     {
         _isSelectionMode = !_isSelectionMode;
         SelectionToolbarItem.Text = _isSelectionMode ? "Annulla" : "Seleziona";
+
+        // While ticking rows for deletion, a press-and-hold must not pick a row up.
+        DownloadsList.CanReorderItems = !_isSelectionMode;
 
         foreach (var file in _files)
         {
@@ -211,6 +135,7 @@ public partial class DownloadsPage : ContentPage
 
         _isSelectionMode = false;
         SelectionToolbarItem.Text = "Seleziona";
+        DownloadsList.CanReorderItems = true;
         await LoadDownloadsAsync();
     }
 

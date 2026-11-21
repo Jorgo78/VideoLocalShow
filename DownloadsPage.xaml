@@ -23,7 +23,16 @@
             IsVisible="False" />
 
         <RefreshView x:Name="DownloadsRefreshView" Grid.Row="1" Refreshing="OnRefreshing">
-            <CollectionView x:Name="DownloadsList" SelectionMode="None" Scrolled="OnDownloadsScrolled">
+            <!-- CanReorderItems is the CollectionView's own drag-to-reorder: press and hold a row,
+                 drag it to where it should go and let go. It moves the item inside the bound
+                 ObservableCollection itself, scrolls the list near its edges, and is switched off
+                 from code while multi-select is on (see OnToggleSelectionModeClicked). That order
+                 is also the playback order. -->
+            <CollectionView
+                x:Name="DownloadsList"
+                SelectionMode="None"
+                CanReorderItems="True"
+                ReorderCompleted="OnReorderCompleted">
                 <CollectionView.ItemsLayout>
                     <LinearItemsLayout Orientation="Vertical" ItemSpacing="6" />
                 </CollectionView.ItemsLayout>
@@ -89,21 +98,6 @@
                                     VerticalOptions="Center"
                                     IsVisible="{Binding ShowRowActions}" />
                             </Grid>
-
-                            <!-- Press and hold a row, then drag it to where it should go in the
-                                 list; that order is also the playback order. Both recognizers
-                                 sit on the row itself, so a row is both what gets picked up and
-                                 what it can be dropped onto. -->
-                            <Border.GestureRecognizers>
-                                <DragGestureRecognizer
-                                    CanDrag="{Binding CanReorder}"
-                                    DragStarting="OnRowDragStarting"
-                                    DropCompleted="OnRowDropCompleted" />
-                                <DropGestureRecognizer
-                                    AllowDrop="{Binding CanReorder}"
-                                    DragOver="OnRowDragOver"
-                                    Drop="OnRowDrop" />
-                            </Border.GestureRecognizers>
                         </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
