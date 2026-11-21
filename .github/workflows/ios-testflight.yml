@@ -8,7 +8,12 @@ on:
 
 jobs:
   build-and-upload:
-    runs-on: macos-latest
+    # The xcode-27 image, not macos-latest: `dotnet workload install maui-ios` now installs the
+    # iOS 27.2 pack, which needs Xcode 27.2, and macos-latest only goes up to Xcode 26.6
+    # (linking the 27.2 runtime with Xcode 26.x fails with "slice is not page aligned").
+    # The xcode-27 image is currently a public preview; if it goes away or the label is renamed,
+    # this is the line to change.
+    runs-on: xcode-27
 
     steps:
       - uses: actions/checkout@v4
@@ -18,19 +23,19 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      # macos-latest defaults to Xcode 26.6, newer than what the installed .NET for iOS
-      # workload pack (26.0.x) was built for. Xcode 26.0 itself can't be used instead: the
-      # runner has no iOS 26.0 simulator runtime, which actool insists on having a match for
-      # (even for a device build). Xcode 26.2 is the closest version that does have one, and
-      # the pack's own strict Xcode version check is switched off in the build step below.
-      # Revisit this when the iOS workload is updated to a newer pack.
-      - name: Select Xcode 26.2
+      # Match Xcode to the workload pack's own required version (the pack refuses to build with
+      # any other). The image's default is 27.1, so pin 27.2 explicitly. Revisit when the
+      # workload moves on to a newer pack.
+      - name: Select Xcode 27.2
         run: |
-          sudo xcode-select -s /Applications/Xcode_26.2.app
+          sudo xcode-select -s /Applications/Xcode_27.2.app
           xcodebuild -version
 
       - name: Install MAUI iOS workload
-        run: dotnet workload install maui-ios
+        run: |
+          dotnet workload install maui-ios
+          # Printed so a pack/Xcode mismatch is obvious from the log.
+          dotnet workload list
 
       # --- Codesigning setup -------------------------------------------------------
       # A dedicated, temporary keychain rather than the runner's default one: it's
@@ -138,7 +143,6 @@ jobs:
             -p:RuntimeIdentifier=ios-arm64 \
             -p:ArchiveOnBuild=true \
             -p:BuildIpa=true \
-            -p:ValidateXcodeVersion=false \
             -p:CodesignKey="$CODESIGN_IDENTITY" \
             -p:CodesignProvision="$CODESIGN_PROVISION" \
             -p:ApplicationVersion=${{ github.run_number }}
