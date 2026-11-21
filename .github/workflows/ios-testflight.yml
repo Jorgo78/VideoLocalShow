@@ -22,10 +22,15 @@ jobs:
       # iOS workload pack (26.0.x) supports - it refuses to build ("requires Xcode 26.0").
       # Pin the matching Xcode instead of relying on the runner's default. Revisit this when
       # the iOS workload is updated to a newer pack.
+      #
+      # The real install path (26.0.1) rather than the /Applications/Xcode_26.0.app alias: with
+      # the alias, xcodebuild/xcrun then failed to locate the macOS SDK inside it.
       - name: Select Xcode 26.0
         run: |
-          sudo xcode-select -s /Applications/Xcode_26.0.app
+          sudo xcode-select -s /Applications/Xcode_26.0.1.app
           xcodebuild -version
+          xcrun --show-sdk-path
+          ls /Applications/Xcode_26.0.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs
 
       - name: Install MAUI iOS workload
         run: dotnet workload install maui-ios
