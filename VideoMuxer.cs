@@ -171,8 +171,17 @@ public static class VideoMuxer
             throw new InvalidOperationException("Impossibile preparare le tracce per l'unione.");
         }
 
+        // Take each track's own time range rather than its asset's overall Duration: the two can
+        // disagree for the fragmented MP4s YouTube serves, and inserting the longer figure padded
+        // the composition with empty time - which plays back as a long stretch of black video
+        // after the real content ends. The merged file is only as long as the shorter of the two
+        // tracks, so neither one ever runs past the other into nothing.
+        var videoRange = sourceVideoTrack.TimeRange;
+        var audioRange = sourceAudioTrack.TimeRange;
+        var mergedDuration = CMTime.GetMinimum(videoRange.Duration, audioRange.Duration);
+
         compositionVideo.InsertTimeRange(
-            new CMTimeRange { Start = CMTime.Zero, Duration = videoAsset.Duration },
+            new CMTimeRange { Start = videoRange.Start, Duration = mergedDuration },
             sourceVideoTrack,
             CMTime.Zero,
             out var videoError);
@@ -182,7 +191,7 @@ public static class VideoMuxer
         }
 
         compositionAudio.InsertTimeRange(
-            new CMTimeRange { Start = CMTime.Zero, Duration = audioAsset.Duration },
+            new CMTimeRange { Start = audioRange.Start, Duration = mergedDuration },
             sourceAudioTrack,
             CMTime.Zero,
             out var audioError);
@@ -203,7 +212,10 @@ public static class VideoMuxer
         {
             OutputUrl = NSUrl.FromFilename(outputPath),
             OutputFileType = AVFileTypes.Mpeg4.GetConstant(),
-            ShouldOptimizeForNetworkUse = true
+            ShouldOptimizeForNetworkUse = true,
+            // Explicit cap, as a second safeguard against the export running longer than the
+            // content that was actually inserted above.
+            TimeRange = new CMTimeRange { Start = CMTime.Zero, Duration = mergedDuration }
         };
 
         using var registration = cancellationToken.Register(export.CancelExport);
