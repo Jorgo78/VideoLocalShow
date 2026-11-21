@@ -15,7 +15,9 @@ public class AppDelegate : MauiUIApplicationDelegate
 	// the player activates the session itself when playback actually starts.
 	public override bool FinishedLaunching(UIApplication application, NSDictionary launchOptions)
 	{
-		AVFoundation.AVAudioSession.SharedInstance().SetCategory(AVFoundation.AVAudioSessionCategory.Playback.GetConstant()!, out _);
+		// The enum overload returns the error (null on success) instead of taking an out parameter;
+		// a failure here only costs background playback, so it's deliberately not acted on.
+		_ = AVFoundation.AVAudioSession.SharedInstance().SetCategory(AVFoundation.AVAudioSessionCategory.Playback);
 		return base.FinishedLaunching(application, launchOptions);
 	}
 
