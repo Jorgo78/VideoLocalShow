@@ -9,7 +9,6 @@ public class DownloadedFile : INotifyPropertyChanged
     private string? _thumbnailPath;
     private bool _isSelected;
     private bool _isSelectionMode;
-    private bool _isReorderMode;
     private bool _isNowPlaying;
 
     public required string FilePath { get; init; }
@@ -20,30 +19,9 @@ public class DownloadedFile : INotifyPropertyChanged
 
     public required ICommand PlayCommand { get; init; }
 
-    public required ICommand MoveUpCommand { get; init; }
-
-    public required ICommand MoveDownCommand { get; init; }
-
-    /// <summary>
-    /// True while the page's reorder mode is on - set on every row at once by the page, like
-    /// <see cref="IsSelectionMode"/>, so the up/down arrows can take the place of the play button
-    /// through binding.
-    /// </summary>
-    public bool IsReorderMode
-    {
-        get => _isReorderMode;
-        set
-        {
-            if (_isReorderMode == value)
-            {
-                return;
-            }
-
-            _isReorderMode = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(ShowRowActions));
-        }
-    }
+    /// <summary>Rows can be dragged to a new place in the list, except while multi-select is on -
+    /// there a press on a row has to mean "tick it", not "pick it up".</summary>
+    public bool CanReorder => !IsSelectionMode;
 
     /// <summary>True for the row currently playing in the preview, so the list shows where the
     /// sequence has got to.</summary>
@@ -80,12 +58,13 @@ public class DownloadedFile : INotifyPropertyChanged
             _isSelectionMode = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ShowRowActions));
+            OnPropertyChanged(nameof(CanReorder));
         }
     }
 
-    /// <summary>The per-row play button only makes sense outside selection and reorder mode -
-    /// while selecting, the checkbox takes its place, and while reordering, the arrows do.</summary>
-    public bool ShowRowActions => !IsSelectionMode && !IsReorderMode;
+    /// <summary>The per-row play button only makes sense outside selection mode - while
+    /// selecting, the checkbox takes its place.</summary>
+    public bool ShowRowActions => !IsSelectionMode;
 
     public bool IsSelected
     {

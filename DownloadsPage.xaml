@@ -8,7 +8,6 @@
 
     <ContentPage.ToolbarItems>
         <ToolbarItem x:Name="PlayAllToolbarItem" Text="Riproduci tutto" Clicked="OnPlayAllClicked" Order="Secondary" Priority="0" />
-        <ToolbarItem x:Name="ReorderToolbarItem" Text="Riordina" Clicked="OnToggleReorderModeClicked" Order="Secondary" Priority="1" />
         <ToolbarItem x:Name="SelectionToolbarItem" Text="Seleziona" Clicked="OnToggleSelectionModeClicked" Order="Primary" Priority="0" />
     </ContentPage.ToolbarItems>
 
@@ -24,7 +23,7 @@
             IsVisible="False" />
 
         <RefreshView x:Name="DownloadsRefreshView" Grid.Row="1" Refreshing="OnRefreshing">
-            <CollectionView x:Name="DownloadsList" SelectionMode="None">
+            <CollectionView x:Name="DownloadsList" SelectionMode="None" Scrolled="OnDownloadsScrolled">
                 <CollectionView.ItemsLayout>
                     <LinearItemsLayout Orientation="Vertical" ItemSpacing="6" />
                 </CollectionView.ItemsLayout>
@@ -89,31 +88,22 @@
                                     Padding="8"
                                     VerticalOptions="Center"
                                     IsVisible="{Binding ShowRowActions}" />
-
-                                <!-- Only shown in reorder mode, in the play button's place. -->
-                                <HorizontalStackLayout Grid.Column="3" Spacing="2" VerticalOptions="Center" IsVisible="{Binding IsReorderMode}">
-                                    <Button
-                                        Text="&#9650;"
-                                        Command="{Binding MoveUpCommand}"
-                                        CommandParameter="{Binding .}"
-                                        SemanticProperties.Description="Sposta su"
-                                        FontSize="14"
-                                        Padding="0"
-                                        WidthRequest="38"
-                                        HeightRequest="38"
-                                        CornerRadius="19" />
-                                    <Button
-                                        Text="&#9660;"
-                                        Command="{Binding MoveDownCommand}"
-                                        CommandParameter="{Binding .}"
-                                        SemanticProperties.Description="Sposta giù"
-                                        FontSize="14"
-                                        Padding="0"
-                                        WidthRequest="38"
-                                        HeightRequest="38"
-                                        CornerRadius="19" />
-                                </HorizontalStackLayout>
                             </Grid>
+
+                            <!-- Press and hold a row, then drag it to where it should go in the
+                                 list; that order is also the playback order. Both recognizers
+                                 sit on the row itself, so a row is both what gets picked up and
+                                 what it can be dropped onto. -->
+                            <Border.GestureRecognizers>
+                                <DragGestureRecognizer
+                                    CanDrag="{Binding CanReorder}"
+                                    DragStarting="OnRowDragStarting"
+                                    DropCompleted="OnRowDropCompleted" />
+                                <DropGestureRecognizer
+                                    AllowDrop="{Binding CanReorder}"
+                                    DragOver="OnRowDragOver"
+                                    Drop="OnRowDrop" />
+                            </Border.GestureRecognizers>
                         </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>

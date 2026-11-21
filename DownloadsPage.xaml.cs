@@ -6,11 +6,14 @@ namespace VideoLocalShow;
 
 public partial class DownloadsPage : ContentPage
 {
-    // An ObservableCollection so a row moved in reorder mode slides to its new place in the list
-    // instead of the whole list being rebuilt. Its order is also the playback order.
+    // An ObservableCollection so a row dragged to a new place slides there instead of the whole
+    // list being rebuilt. Its order is also the playback order.
     private ObservableCollection<DownloadedFile> _files = [];
     private bool _isSelectionMode;
-    private bool _isReorderMode;
+    private DownloadedFile? _draggedFile;
+    private int _firstVisibleIndex;
+    private int _lastVisibleIndex;
+    private DateTime _lastDragAutoScrollUtc;
     private DownloadedFile? _previewFile;
     private CancellationTokenSource? _rotationDebounceCts;
 
@@ -58,10 +61,7 @@ public partial class DownloadsPage : ContentPage
                 FileName = info.Name,
                 Details = $"{FormatSize(info.Length)} · {info.LastWriteTime:g}",
                 PlayCommand = new Command<DownloadedFile>(async f => await PlayAsync(f!)),
-                MoveUpCommand = new Command<DownloadedFile>(f => MoveFile(f!, -1)),
-                MoveDownCommand = new Command<DownloadedFile>(f => MoveFile(f!, +1)),
-                IsSelectionMode = _isSelectionMode,
-                IsReorderMode = _isReorderMode
+                IsSelectionMode = _isSelectionMode
             })
             .ToList());
 
@@ -73,40 +73,84 @@ public partial class DownloadsPage : ContentPage
         _ = LoadThumbnailsAsync(files);
     }
 
-    /// <summary>
-    /// Toggles reorder mode, where each row shows up/down arrows instead of its play button. The
-    /// order set here is saved, and is the order the files play back in.
-    /// </summary>
-    private void OnToggleReorderModeClicked(object? sender, EventArgs e) => SetReorderMode(!_isReorderMode);
+    // --- Drag and drop reordering ---------------------------------------------------------------
+    // Press and hold a row, drag it over another one and let go: the dragged row takes that
+    // row's place. The new order is saved, and it is the order the files play back in.
 
-    private void SetReorderMode(bool enabled)
+    private void OnRowDragStarting(object? sender, DragStartingEventArgs e)
     {
-        _isReorderMode = enabled;
-        ReorderToolbarItem.Text = enabled ? "Fine riordino" : "Riordina";
-
-        foreach (var file in _files)
+        _draggedFile = (sender as DragGestureRecognizer)?.Parent?.BindingContext as DownloadedFile;
+        if (_draggedFile is null)
         {
-            file.IsReorderMode = enabled;
+            e.Cancel = true;
+            return;
         }
 
-        // Reorder and multi-select swap the same row controls around, so only one at a time.
-        if (enabled && _isSelectionMode)
-        {
-            OnToggleSelectionModeClicked(null, EventArgs.Empty);
-        }
+        // The dragged row is tracked in _draggedFile; the payload only has to exist, since some
+        // platforms refuse to start a drag with an empty one.
+        e.Data.Text = _draggedFile.FileName;
     }
 
-    private void MoveFile(DownloadedFile file, int offset)
+    private void OnRowDropCompleted(object? sender, DropCompletedEventArgs e) => _draggedFile = null;
+
+    private void OnRowDragOver(object? sender, DragEventArgs e)
     {
-        var index = _files.IndexOf(file);
-        var target = index + offset;
-        if (index < 0 || target < 0 || target >= _files.Count)
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        ScrollListWhileDragging(e);
+    }
+
+    private void OnRowDrop(object? sender, DropEventArgs e)
+    {
+        var target = (sender as DropGestureRecognizer)?.Parent?.BindingContext as DownloadedFile;
+        var dragged = _draggedFile;
+        _draggedFile = null;
+
+        if (dragged is null || target is null || ReferenceEquals(dragged, target))
         {
             return;
         }
 
-        _files.Move(index, target);
+        var from = _files.IndexOf(dragged);
+        var to = _files.IndexOf(target);
+        if (from < 0 || to < 0)
+        {
+            return;
+        }
+
+        _files.Move(from, to);
         DownloadOrderStore.Save(_files.Select(f => f.FileName));
+    }
+
+    private void OnDownloadsScrolled(object? sender, ItemsViewScrolledEventArgs e)
+    {
+        _firstVisibleIndex = e.FirstVisibleItemIndex;
+        _lastVisibleIndex = e.LastVisibleItemIndex;
+    }
+
+    // The list doesn't scroll by itself while a row is being dragged, so without this a row could
+    // only be moved as far as the screen currently shows. Holding it near the top or bottom edge
+    // scrolls the list a row at a time, throttled so it moves at a followable speed.
+    private void ScrollListWhileDragging(DragEventArgs e)
+    {
+        const double edgeZone = 90;
+        const int minMillisecondsBetweenScrolls = 350;
+
+        if (e.GetPosition(DownloadsRefreshView) is not { } position ||
+            (DateTime.UtcNow - _lastDragAutoScrollUtc).TotalMilliseconds < minMillisecondsBetweenScrolls)
+        {
+            return;
+        }
+
+        if (position.Y < edgeZone && _firstVisibleIndex > 0)
+        {
+            _lastDragAutoScrollUtc = DateTime.UtcNow;
+            DownloadsList.ScrollTo(_firstVisibleIndex - 1, position: ScrollToPosition.MakeVisible, animate: true);
+        }
+        else if (position.Y > DownloadsRefreshView.Height - edgeZone && _lastVisibleIndex < _files.Count - 1)
+        {
+            _lastDragAutoScrollUtc = DateTime.UtcNow;
+            DownloadsList.ScrollTo(_lastVisibleIndex + 1, position: ScrollToPosition.MakeVisible, animate: true);
+        }
     }
 
     /// <summary>
@@ -117,11 +161,6 @@ public partial class DownloadsPage : ContentPage
     {
         _isSelectionMode = !_isSelectionMode;
         SelectionToolbarItem.Text = _isSelectionMode ? "Annulla" : "Seleziona";
-
-        if (_isSelectionMode && _isReorderMode)
-        {
-            SetReorderMode(false);
-        }
 
         foreach (var file in _files)
         {
@@ -280,12 +319,6 @@ public partial class DownloadsPage : ContentPage
         if (_files.Count == 0)
         {
             return;
-        }
-
-        // Selecting or reordering rows and starting playback at once would be confusing.
-        if (_isReorderMode)
-        {
-            SetReorderMode(false);
         }
 
         StartPlayback(_files[0]);
