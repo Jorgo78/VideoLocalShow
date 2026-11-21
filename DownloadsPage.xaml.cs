@@ -19,6 +19,7 @@ public partial class DownloadsPage : ContentPage
     {
         InitializeComponent();
         DownloadsList.HandlerChanged += OnDownloadsListHandlerChanged;
+        SizeChanged += OnPageSizeChanged;
     }
 
     protected override void OnAppearing()
@@ -310,7 +311,8 @@ public partial class DownloadsPage : ContentPage
 
         if (isFirstOfRun)
         {
-            DeviceDisplay.Current.MainDisplayInfoChanged += OnDisplayInfoChanged;
+            // Already on its side when playback starts: go straight to full screen.
+            UpdatePreviewForOrientation();
 #if ANDROID
             _ = EnsureNotificationPermissionAsync();
 #endif
@@ -395,18 +397,38 @@ public partial class DownloadsPage : ContentPage
 
     private void OnPreviewCloseClicked(object? sender, EventArgs e) => ClosePreview();
 
-    // Android fires MainDisplayInfoChanged several times in quick succession while a rotation
-    // animation is in flight, sometimes with a stale/intermediate orientation reading before the
-    // final one - reacting to every event as it arrives could flip fullscreen on, then back off,
-    // depending on which reading happens to land last. Debouncing to the value that's still
-    // current a moment after events stop arriving avoids acting on those transient readings.
-    private void OnDisplayInfoChanged(object? sender, DisplayInfoChangedEventArgs e)
+    // Whether the preview is currently expanded to full screen. Tracked so a size change that
+    // doesn't change the orientation (hiding the bars grows the page, for one) does nothing.
+    private bool _isPreviewFullscreen;
+
+    // Rotating the device changes the page's own size, so the orientation is read from that
+    // (wider than tall = landscape) rather than from DeviceDisplay.MainDisplayInfoChanged: on
+    // Android that event is driven by the physical orientation sensor, so it depends on sensor
+    // behaviour (and doesn't fire for a rotation that is forced or locked), while SizeChanged
+    // fires for every rotation on both platforms.
+    private void OnPageSizeChanged(object? sender, EventArgs e) => UpdatePreviewForOrientation();
+
+    // A rotation produces several size changes in quick succession, sometimes with an
+    // intermediate size before the final one - reacting to every one as it arrives could flip
+    // full screen on, then back off. Debouncing to the orientation that's still current a moment
+    // after the changes stop avoids acting on those transient readings.
+    private void UpdatePreviewForOrientation()
     {
+        if (!PreviewContainer.IsVisible || Width <= 0 || Height <= 0)
+        {
+            return;
+        }
+
         _rotationDebounceCts?.Cancel();
+
+        var isLandscape = Width > Height;
+        if (isLandscape == _isPreviewFullscreen)
+        {
+            return;
+        }
+
         var cts = new CancellationTokenSource();
         _rotationDebounceCts = cts;
-        var isLandscape = e.DisplayInfo.Orientation == DisplayOrientation.Landscape;
-
         _ = DebounceRotationAsync(isLandscape, cts.Token);
     }
 
@@ -434,6 +456,7 @@ public partial class DownloadsPage : ContentPage
     // page underneath it, never stop being exactly where they were.
     private void SetPreviewFullscreen(bool fullscreen)
     {
+        _isPreviewFullscreen = fullscreen;
         Grid.SetRowSpan(PreviewContainer, fullscreen ? 3 : 1);
         PreviewContainer.HeightRequest = fullscreen ? -1 : 210;
         PreviewContainer.Margin = fullscreen ? new Thickness(0) : new Thickness(0, 0, 0, 12);
@@ -448,7 +471,6 @@ public partial class DownloadsPage : ContentPage
             return;
         }
 
-        DeviceDisplay.Current.MainDisplayInfoChanged -= OnDisplayInfoChanged;
         _rotationDebounceCts?.Cancel();
         SetPreviewFullscreen(false);
         PreviewPlayer.Stop();
