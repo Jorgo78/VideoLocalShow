@@ -10,23 +10,33 @@ public partial class DownloadsPage : ContentPage
     // bound collection, so it has to be one it can modify. Its order is also the playback order.
     private ObservableCollection<DownloadedFile> _files = [];
     private bool _isSelectionMode;
+    private DownloadedFile? _draggingFile;
+    private bool _dragTrackerAttached;
     private DownloadedFile? _previewFile;
     private CancellationTokenSource? _rotationDebounceCts;
 
     public DownloadsPage()
     {
         InitializeComponent();
+        DownloadsList.HandlerChanged += OnDownloadsListHandlerChanged;
     }
 
     protected override void OnAppearing()
     {
         base.OnAppearing();
+#if ANDROID
+        RowDragTracker.TouchEnded += OnTouchEnded;
+#endif
         _ = LoadDownloadsAsync();
     }
 
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+#if ANDROID
+        RowDragTracker.TouchEnded -= OnTouchEnded;
+#endif
+        SetDraggingRow(null);
         // Leaving the page (switching tabs) should never leave this inline preview quietly
         // playing audio in the background.
         ClosePreview();
@@ -71,8 +81,96 @@ public partial class DownloadsPage : ContentPage
 
     // Fires once a row has been dragged to its new place (the CollectionView has already moved
     // it in _files by then): save the order, which is also the order the files play back in.
-    private void OnReorderCompleted(object? sender, EventArgs e) =>
+    private void OnReorderCompleted(object? sender, EventArgs e)
+    {
+        SetDraggingRow(null);
         DownloadOrderStore.Save(_files.Select(f => f.FileName));
+    }
+
+    // --- Highlight of the row being dragged -------------------------------------------------------
+    // The CollectionView's own reorder tells us nothing about a drag starting, so each platform
+    // watches for the same long press that starts it (and for the finger lifting again) and reports
+    // the row here; the row's tint is bound to DownloadedFile.IsDragging.
+
+    private void SetDraggingRow(DownloadedFile? file)
+    {
+        if (_draggingFile is not null)
+        {
+            _draggingFile.IsDragging = false;
+        }
+
+        _draggingFile = file;
+        if (file is not null)
+        {
+            file.IsDragging = true;
+        }
+    }
+
+    private void OnDownloadsListHandlerChanged(object? sender, EventArgs e)
+    {
+        if (_dragTrackerAttached)
+        {
+            return;
+        }
+
+#if ANDROID
+        if (DownloadsList.Handler?.PlatformView is AndroidX.RecyclerView.Widget.RecyclerView recyclerView)
+        {
+            recyclerView.AddOnItemTouchListener(new RowDragTracker(recyclerView.Context!, item =>
+            {
+                // While ticking rows for deletion nothing is draggable, so nothing is highlighted either.
+                if (!_isSelectionMode)
+                {
+                    SetDraggingRow(item as DownloadedFile);
+                }
+            }));
+            _dragTrackerAttached = true;
+        }
+#elif IOS
+        if (DownloadsList.Handler?.PlatformView is UIKit.UICollectionView collectionView)
+        {
+            // A second long-press recognizer alongside the one MAUI uses for the reorder itself;
+            // it must be allowed to recognize at the same time as it, and must not swallow touches.
+            collectionView.AddGestureRecognizer(new UIKit.UILongPressGestureRecognizer(
+                recognizer => OnRowLongPressChanged(recognizer, collectionView))
+            {
+                CancelsTouchesInView = false,
+                Delegate = new SimultaneousRecognitionDelegate()
+            });
+            _dragTrackerAttached = true;
+        }
+#endif
+    }
+
+#if ANDROID
+    private void OnTouchEnded() => MainThread.BeginInvokeOnMainThread(() => SetDraggingRow(null));
+#elif IOS
+    private void OnRowLongPressChanged(UIKit.UILongPressGestureRecognizer recognizer, UIKit.UICollectionView collectionView)
+    {
+        switch (recognizer.State)
+        {
+            case UIKit.UIGestureRecognizerState.Began:
+                var indexPath = collectionView.IndexPathForItemAtPoint(recognizer.LocationInView(collectionView));
+                if (!_isSelectionMode && indexPath is not null && (int)indexPath.Item < _files.Count)
+                {
+                    SetDraggingRow(_files[(int)indexPath.Item]);
+                }
+
+                break;
+
+            case UIKit.UIGestureRecognizerState.Ended:
+            case UIKit.UIGestureRecognizerState.Cancelled:
+            case UIKit.UIGestureRecognizerState.Failed:
+                SetDraggingRow(null);
+                break;
+        }
+    }
+
+    private sealed class SimultaneousRecognitionDelegate : UIKit.UIGestureRecognizerDelegate
+    {
+        public override bool ShouldRecognizeSimultaneously(UIKit.UIGestureRecognizer gestureRecognizer, UIKit.UIGestureRecognizer otherGestureRecognizer) => true;
+    }
+#endif
 
     /// <summary>
     /// Toggles between the normal per-row play/delete controls and a multi-select mode where

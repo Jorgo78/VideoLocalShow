@@ -39,6 +39,14 @@
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:DownloadedFile">
                         <Border Style="{StaticResource Card}" Padding="8">
+                            <!-- Tints the row while it is held for reordering, and puts it back
+                                 when it is let go. -->
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsDragging}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="#44C9791B" />
+                                    <Setter Property="Stroke" Value="#C9791B" />
+                                </DataTrigger>
+                            </Border.Triggers>
                             <Grid ColumnDefinitions="Auto,72,*,Auto" ColumnSpacing="8">
 
                                 <!-- Only shown in multi-select mode, replacing the play/delete

@@ -10,6 +10,7 @@ public class DownloadedFile : INotifyPropertyChanged
     private bool _isSelected;
     private bool _isSelectionMode;
     private bool _isNowPlaying;
+    private bool _isDragging;
 
     public required string FilePath { get; init; }
 
@@ -19,6 +20,23 @@ public class DownloadedFile : INotifyPropertyChanged
 
     public required ICommand PlayCommand { get; init; }
 
+
+    /// <summary>True while this row is picked up for drag-and-drop reordering, so it can be tinted
+    /// until it is let go.</summary>
+    public bool IsDragging
+    {
+        get => _isDragging;
+        set
+        {
+            if (_isDragging == value)
+            {
+                return;
+            }
+
+            _isDragging = value;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>True for the row currently playing in the preview, so the list shows where the
     /// sequence has got to.</summary>

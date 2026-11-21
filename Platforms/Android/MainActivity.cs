@@ -2,6 +2,7 @@ using Android.App;
 using Android.Content;
 using Android.Content.PM;
 using Android.OS;
+using Android.Views;
 
 namespace VideoLocalShow;
 
@@ -47,6 +48,19 @@ public class MainActivity : MauiAppCompatActivity
     {
         base.OnNewIntent(intent);
         HandleIncomingIntent(intent);
+    }
+
+    // Every touch passes through here first, which makes it the one place that reliably sees a
+    // finger lift or a gesture cancel - the Downloads list uses that to put a dragged row's
+    // highlight back (see RowDragTracker).
+    public override bool DispatchTouchEvent(MotionEvent? e)
+    {
+        if (e?.ActionMasked is MotionEventActions.Up or MotionEventActions.Cancel)
+        {
+            RowDragTracker.NotifyTouchEnded();
+        }
+
+        return base.DispatchTouchEvent(e);
     }
 
     private static void HandleIncomingIntent(Intent? intent)
