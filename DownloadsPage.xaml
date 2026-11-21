@@ -201,6 +201,20 @@
             </Grid>
         </Grid>
 
+
+        <!-- Briefly covers the whole page while the preview switches to or from full screen, so the
+             layout changes (padding, bars, rows) don't show one after the other as a jump. It is
+             faded away once they are all in place - see SetPreviewFullscreen. Declared last so it
+             paints over everything. -->
+        <BoxView
+            x:Name="TransitionCover"
+            Grid.Row="0"
+            Grid.RowSpan="3"
+            Color="Black"
+            Opacity="0"
+            IsVisible="False"
+            InputTransparent="True" />
+
     </Grid>
 
 </ContentPage>

@@ -449,7 +449,7 @@ public partial class DownloadsPage : ContentPage
     {
         try
         {
-            await Task.Delay(250, token);
+            await Task.Delay(80, token);
         }
         catch (TaskCanceledException)
         {
@@ -461,16 +461,30 @@ public partial class DownloadsPage : ContentPage
             return;
         }
 
-        MainThread.BeginInvokeOnMainThread(() => SetPreviewFullscreen(isLandscape));
+        MainThread.BeginInvokeOnMainThread(() => SetPreviewFullscreen(isLandscape, animated: true));
     }
 
     // Expands the preview across every row of the page's own Grid (rather than just its normal
     // Row="0" slot) instead of navigating to a different page - the video, and the rest of the
     // page underneath it, never stop being exactly where they were.
-    private void SetPreviewFullscreen(bool fullscreen)
+    private int _coverVersion;
+
+    private void SetPreviewFullscreen(bool fullscreen, bool animated = false)
     {
         var changed = fullscreen != _isPreviewFullscreen;
         _isPreviewFullscreen = fullscreen;
+
+        // Everything below changes the layout in several steps (rows, padding, bars). Drawn one
+        // after the other that reads as a jump, so while it happens a black cover hides the
+        // in-between states, and it is faded away once they are all in place.
+        var covered = animated && changed;
+        if (covered)
+        {
+            _coverVersion++;
+            TransitionCover.CancelAnimations();
+            TransitionCover.Opacity = 1;
+            TransitionCover.IsVisible = true;
+        }
         Grid.SetRowSpan(PreviewContainer, fullscreen ? 3 : 1);
         PreviewContainer.HeightRequest = fullscreen ? -1 : 210;
         PreviewContainer.Margin = fullscreen ? new Thickness(0) : new Thickness(0, 0, 0, 12);
@@ -496,6 +510,29 @@ public partial class DownloadsPage : ContentPage
                 : Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.StatusBarHiddenMode.Default);
         Microsoft.Maui.Controls.PlatformConfiguration.iOSSpecific.Page.SetPrefersHomeIndicatorAutoHidden(this, fullscreen);
 #endif
+
+        if (covered)
+        {
+            _ = RevealAfterTransitionAsync();
+        }
+    }
+
+    private async Task RevealAfterTransitionAsync()
+    {
+        var version = _coverVersion;
+
+        // A moment for the bars to finish hiding/showing before the cover starts to go.
+        await Task.Delay(120);
+        if (version != _coverVersion)
+        {
+            return;
+        }
+
+        await TransitionCover.FadeToAsync(0, 180);
+        if (version == _coverVersion)
+        {
+            TransitionCover.IsVisible = false;
+        }
     }
 
     private void ClosePreview()

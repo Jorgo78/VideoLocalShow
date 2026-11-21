@@ -38,6 +38,17 @@ public class MainActivity : MauiAppCompatActivity
         // has subscribed to DeepLinkService - a cold start via "Condividi" reaches it too, not
         // just a share received while the app is already running.
         base.OnCreate(savedInstanceState);
+
+        // Let content draw under the display cutout (the camera notch) from the start, so a
+        // full-screen video isn't stopped short of it. Set once here rather than when going full
+        // screen: changing the window's attributes mid-transition forces an extra re-layout, which
+        // showed as a jump when the preview expanded.
+        if (OperatingSystem.IsAndroidVersionAtLeast(28) && Window?.Attributes is { } attributes)
+        {
+            attributes.LayoutInDisplayCutoutMode = LayoutInDisplayCutoutMode.ShortEdges;
+            Window.Attributes = attributes;
+        }
+
         HandleIncomingIntent(Intent);
     }
 

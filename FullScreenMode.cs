@@ -80,16 +80,6 @@ public static class FullScreenMode
         window.SetDecorFitsSystemWindows(!fullScreen);
 #pragma warning restore CA1422
 
-        // Without this the video stops short of the camera cutout, leaving a strip beside it even
-        // with the system bars hidden.
-        if (window.Attributes is { } attributes)
-        {
-            attributes.LayoutInDisplayCutoutMode = fullScreen
-                ? LayoutInDisplayCutoutMode.ShortEdges
-                : LayoutInDisplayCutoutMode.Default;
-            window.Attributes = attributes;
-        }
-
         var controller = window.InsetsController;
         if (controller is null)
         {
