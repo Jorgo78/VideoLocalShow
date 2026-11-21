@@ -15,7 +15,7 @@ public class AppDelegate : MauiUIApplicationDelegate
 	// the player activates the session itself when playback actually starts.
 	public override bool FinishedLaunching(UIApplication application, NSDictionary launchOptions)
 	{
-		AVFoundation.AVAudioSession.SharedInstance().SetCategory(AVFoundation.AVAudioSessionCategory.Playback, out _);
+		AVFoundation.AVAudioSession.SharedInstance().SetCategory(AVFoundation.AVAudioSessionCategory.Playback.GetConstant()!, out _);
 		return base.FinishedLaunching(application, launchOptions);
 	}
 
