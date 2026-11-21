@@ -328,11 +328,25 @@ public partial class DownloadsPage : ContentPage
             UpdatePreviewForOrientation();
 #if ANDROID
             _ = EnsureNotificationPermissionAsync();
+            EnsureNativeCastButton();
 #endif
         }
     }
 
 #if ANDROID
+    private bool _castButtonAttached;
+
+    // Puts a "share to another screen" button into the player's own control bar (see
+    // NativeCastButton). iOS needs nothing: AVPlayerViewController's native bar already has the
+    // AirPlay button, which appears whenever an AirPlay screen is in range.
+    private void EnsureNativeCastButton()
+    {
+        if (!_castButtonAttached)
+        {
+            _castButtonAttached = NativeCastButton.TryAttach(PreviewPlayer.Handler?.PlatformView);
+        }
+    }
+
     // Android 13+ shows the media-playback notification (the thing that keeps playback alive in
     // the background and carries its controls) only once this permission is granted. Playback
     // itself works without it, so a refusal is not an error.
