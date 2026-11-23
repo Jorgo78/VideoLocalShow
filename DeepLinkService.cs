@@ -29,6 +29,24 @@ public static class DeepLinkService
         }
     }
 
+    /// <summary>
+    /// iOS: picks up a link the Share Extension left in the App Group, if any, and handles it.
+    /// Called whenever the app comes to the front. It can't live in whichever page happens to be
+    /// showing: the page that acts on shared links isn't the one the app opens on.
+    /// </summary>
+    public static void PollAppGroup()
+    {
+#if IOS
+        var shared = new Foundation.NSUserDefaults("group.com.videolocalshowapp.videolocalshow", Foundation.NSUserDefaultsType.SuiteName);
+        if (shared.StringForKey("SharedUrl") is { Length: > 0 } sharedUrl)
+        {
+            shared.RemoveObject("SharedUrl");
+            ShareDebugLog.Append($"DeepLinkService.PollAppGroup found SharedUrl: {sharedUrl}");
+            Handle(sharedUrl);
+        }
+#endif
+    }
+
     public static string? ConsumePendingUrl()
     {
         var url = PendingUrl;

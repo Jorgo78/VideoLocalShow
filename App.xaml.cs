@@ -11,6 +11,12 @@ public partial class App : Application
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
-		return new Window(new AppShell());
+		var window = new Window(new AppShell());
+
+		// Each time the app comes to the front (including the first launch), check whether the
+		// iOS Share Extension has left a link behind. No-op on other platforms.
+		window.Activated += (_, _) => DeepLinkService.PollAppGroup();
+
+		return window;
 	}
 }

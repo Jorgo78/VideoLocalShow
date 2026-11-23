@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:VideoLocalShow.Models"
              x:Class="VideoLocalShow.MainPage"
-             Title="VideoLocalShow">
+             Title="Download">
 
     <!-- Two rows: the search bar/status header never scrolls, everything below it does.
          Search results get their own CollectionView (row "*") rather than being nested inside

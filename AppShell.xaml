@@ -7,17 +7,24 @@
     Title="VideoLocalShow">
 
     <TabBar>
+        <!-- Home is the library of already-downloaded videos; the search / download page is the
+             second tab. The routes stay with their pages (MainPage is still where a shared link
+             is taken - see MainPage.HandleIncomingLinkAsync). -->
         <ShellContent
             Title="Home"
             Icon="icon_home.png"
-            ContentTemplate="{DataTemplate local:MainPage}"
-            Route="MainPage" />
+            ContentTemplate="{DataTemplate local:DownloadsPage}"
+            Route="DownloadsPage" />
 
+        <!-- Content given directly rather than as a ContentTemplate, so MainPage is created when
+             the app starts instead of the first time its tab is opened: it is the one that listens
+             for shared links (DeepLinkService), which can arrive while another tab is showing. -->
         <ShellContent
             Title="Download"
             Icon="icon_downloads.png"
-            ContentTemplate="{DataTemplate local:DownloadsPage}"
-            Route="DownloadsPage" />
+            Route="MainPage">
+            <local:MainPage />
+        </ShellContent>
 
         <!-- TEMP DIAGNOSTIC tab, hidden for now (sharing is confirmed working) - the underlying
              LogPage/ShareDebugLog logging is left in place, paused rather than removed, so it
