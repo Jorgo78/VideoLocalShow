@@ -20,6 +20,29 @@ public class DownloadedFile : INotifyPropertyChanged
 
     public required ICommand PlayCommand { get; init; }
 
+    /// <summary>Opens the "move to group" menu for this row.</summary>
+    public ICommand? MenuCommand { get; set; }
+
+    private bool _isInGroup;
+
+    /// <summary>True when the row sits under a group heading, so it is drawn indented.</summary>
+    public bool IsInGroup
+    {
+        get => _isInGroup;
+        set
+        {
+            if (_isInGroup == value)
+            {
+                return;
+            }
+
+            _isInGroup = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(RowMargin));
+        }
+    }
+
+    public Thickness RowMargin => _isInGroup ? new Thickness(18, 0, 0, 0) : new Thickness(0);
 
     /// <summary>True while this row is picked up for drag-and-drop reordering, so it can be tinted
     /// until it is let go.</summary>

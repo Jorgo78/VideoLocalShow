@@ -6,9 +6,18 @@ namespace VideoLocalShow;
 
 public partial class DownloadsPage : ContentPage
 {
-    // An ObservableCollection: the CollectionView's own drag-to-reorder moves items inside the
-    // bound collection, so it has to be one it can modify. Its order is also the playback order.
-    private ObservableCollection<DownloadedFile> _files = [];
+    // The whole arrangement in order: group headings (GroupHeader) and videos (DownloadedFile). A
+    // video belongs to the nearest heading above it; those above the first heading are in no group.
+    private List<object> _master = [];
+
+    // Every video in _master's order - hidden ones in collapsed groups included. This is the
+    // playback order.
+    private List<DownloadedFile> _files = [];
+
+    // What the list actually shows: _master without the videos of collapsed groups. An
+    // ObservableCollection because the CollectionView's own drag-to-reorder moves items inside the
+    // bound collection.
+    private ObservableCollection<object> _rows = [];
     private bool _isSelectionMode;
     private DownloadedFile? _draggingFile;
     private Thickness _normalRootPadding;
@@ -67,38 +76,412 @@ public partial class DownloadsPage : ContentPage
         var folder = DownloadStorage.GetFolder();
 
         // Enumerating the folder, stat-ing every file for its size and last-write time, and
-        // sorting by that all touch disk - with a lot of downloaded files this was running
+        // arranging them all touch disk - with a lot of downloaded files this was running
         // straight on the UI thread, so opening this tab froze for however long that scan took,
         // worse the more files there were to look at. A background thread keeps the tab
         // responsive regardless of how large the folder has grown.
-        var files = await Task.Run(() => DownloadOrderStore.Apply(
-                Directory.EnumerateFiles(folder).Select(path => new FileInfo(path)),
+        var master = await Task.Run(() =>
+        {
+            var infos = Directory.EnumerateFiles(folder).Select(path => new FileInfo(path)).ToList();
+            var byName = infos.ToDictionary(
                 info => info.Name,
-                info => info.LastWriteTimeUtc)
-            .Select(info => new DownloadedFile
-            {
-                FilePath = info.FullName,
-                FileName = info.Name,
-                Details = $"{FormatSize(info.Length)} · {info.LastWriteTime:g}",
-                PlayCommand = new Command<DownloadedFile>(async f => await PlayAsync(f!)),
-                IsSelectionMode = _isSelectionMode
-            })
-            .ToList());
+                info => new DownloadedFile
+                {
+                    FilePath = info.FullName,
+                    FileName = info.Name,
+                    Details = $"{FormatSize(info.Length)} · {info.LastWriteTime:g}",
+                    PlayCommand = new Command<DownloadedFile>(async f => await PlayAsync(f!)),
+                    IsSelectionMode = _isSelectionMode
+                },
+                StringComparer.Ordinal);
+            var written = infos.ToDictionary(info => info.Name, info => info.LastWriteTimeUtc, StringComparer.Ordinal);
 
-        _files = new ObservableCollection<DownloadedFile>(files);
-        DownloadsList.ItemsSource = _files;
-        EmptyLabel.IsVisible = _files.Count == 0;
+            var layout = LibraryLayoutStore.Load();
+            var placed = layout.Where(e => e.File is not null).Select(e => e.File!).ToHashSet(StringComparer.Ordinal);
+
+            // Files the user hasn't placed yet - freshly downloaded ones - go first, newest first,
+            // above any group, so a new download is visible at the top rather than buried.
+            var result = new List<object>();
+            result.AddRange(byName.Values
+                .Where(f => !placed.Contains(f.FileName))
+                .OrderByDescending(f => written[f.FileName]));
+
+            var seenGroups = new HashSet<string>();
+            var seenFiles = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in layout)
+            {
+                if (entry.File is not null)
+                {
+                    if (byName.TryGetValue(entry.File, out var file) && seenFiles.Add(entry.File))
+                    {
+                        result.Add(file);
+                    }
+                }
+                else if (entry.GroupId is not null && seenGroups.Add(entry.GroupId))
+                {
+                    result.Add(CreateGroup(entry.GroupId, entry.GroupName ?? "Gruppo", entry.Expanded));
+                }
+            }
+
+            foreach (var file in byName.Values)
+            {
+                file.MenuCommand = new Command<DownloadedFile>(async f => await ShowFileMenuAsync(f!));
+            }
+
+            return result;
+        });
+
+        _master = master;
+        RefreshStructure();
+        RebuildRows();
         UpdateDeleteSelectedButton();
 
-        _ = LoadThumbnailsAsync(files);
+        _ = LoadThumbnailsAsync(_files);
+    }
+
+    private GroupHeader CreateGroup(string id, string name, bool expanded)
+    {
+        var group = new GroupHeader(id, name, expanded);
+        group.ToggleCommand = new Command(() => ToggleGroup(group));
+        group.MenuCommand = new Command(async () => await ShowGroupMenuAsync(group));
+        return group;
+    }
+
+    // --- Groups ---------------------------------------------------------------------------------
+
+    // After any change to _master: which group each video is in (for its indent), how many videos
+    // each group holds, the flat list of videos, and the saved layout.
+    private void RefreshStructure()
+    {
+        GroupHeader? current = null;
+        var count = 0;
+        foreach (var item in _master)
+        {
+            if (item is GroupHeader header)
+            {
+                if (current is not null)
+                {
+                    current.Count = count;
+                }
+
+                current = header;
+                count = 0;
+            }
+            else if (item is DownloadedFile file)
+            {
+                file.IsInGroup = current is not null;
+                count++;
+            }
+        }
+
+        if (current is not null)
+        {
+            current.Count = count;
+        }
+
+        _files = _master.OfType<DownloadedFile>().ToList();
+        EmptyLabel.IsVisible = _files.Count == 0 && !_master.OfType<GroupHeader>().Any();
+        SaveLayout();
+    }
+
+    private void SaveLayout() =>
+        LibraryLayoutStore.Save(_master.Select(item => item is GroupHeader group
+            ? new LayoutEntry { GroupId = group.Id, GroupName = group.Name, Expanded = group.IsExpanded }
+            : new LayoutEntry { File = ((DownloadedFile)item).FileName }));
+
+    // Shows _master minus the videos of collapsed groups.
+    private void RebuildRows()
+    {
+        var rows = new List<object>();
+        var hidden = false;
+        foreach (var item in _master)
+        {
+            if (item is GroupHeader header)
+            {
+                hidden = !header.IsExpanded;
+                rows.Add(header);
+            }
+            else if (!hidden)
+            {
+                rows.Add(item);
+            }
+        }
+
+        _rows = new ObservableCollection<object>(rows);
+        DownloadsList.ItemsSource = _rows;
+    }
+
+    private List<DownloadedFile> MembersOf(GroupHeader group)
+    {
+        var members = new List<DownloadedFile>();
+        var index = _master.IndexOf(group);
+        for (var i = index + 1; index >= 0 && i < _master.Count && _master[i] is DownloadedFile file; i++)
+        {
+            members.Add(file);
+        }
+
+        return members;
+    }
+
+    private void ToggleGroup(GroupHeader group)
+    {
+        group.IsExpanded = !group.IsExpanded;
+        var members = MembersOf(group);
+        var headerRow = _rows.IndexOf(group);
+        if (group.IsExpanded)
+        {
+            for (var i = 0; i < members.Count; i++)
+            {
+                _rows.Insert(headerRow + 1 + i, members[i]);
+            }
+        }
+        else
+        {
+            foreach (var member in members)
+            {
+                _rows.Remove(member);
+            }
+        }
+
+        SaveLayout();
+    }
+
+    private async void OnNewGroupClicked(object? sender, EventArgs e)
+    {
+        var name = await AskGroupNameAsync("Nuovo gruppo", null);
+        if (name is null)
+        {
+            return;
+        }
+
+        // At the end: a heading at the top would swallow every video below it.
+        _master.Add(CreateGroup(Guid.NewGuid().ToString("N"), name, expanded: true));
+        RefreshStructure();
+        RebuildRows();
+    }
+
+    private async Task<string?> AskGroupNameAsync(string title, string? current)
+    {
+        var name = await DisplayPromptAsync(title, "Nome del gruppo", "OK", "Annulla", initialValue: current ?? string.Empty, maxLength: 60);
+        return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+    }
+
+    // The three dots of a video row: pick the group to move it to (or take it out of its group).
+    private async Task ShowFileMenuAsync(DownloadedFile file)
+    {
+        var groups = _master.OfType<GroupHeader>().ToList();
+        var current = GroupOf(file);
+        var targets = groups.Where(g => g != current).ToList();
+
+        const string newGroup = "＋ Nuovo gruppo…";
+        const string noGroup = "Fuori da ogni gruppo";
+        var options = new List<string>();
+        options.AddRange(targets.Select(g => g.Name));
+        options.Add(newGroup);
+        if (current is not null)
+        {
+            options.Add(noGroup);
+        }
+
+#pragma warning disable CS0618 // see DeleteAsync below for why the non-Async alert methods are used
+        var choice = await DisplayActionSheet("Sposta in…", "Annulla", null, options.ToArray());
+#pragma warning restore CS0618
+        if (choice is null || choice == "Annulla")
+        {
+            return;
+        }
+
+        if (choice == newGroup)
+        {
+            var name = await AskGroupNameAsync("Nuovo gruppo", null);
+            if (name is null)
+            {
+                return;
+            }
+
+            var created = CreateGroup(Guid.NewGuid().ToString("N"), name, expanded: true);
+            _master.Add(created);
+            MoveFileToGroup(file, created);
+        }
+        else if (choice == noGroup)
+        {
+            MoveFileToGroup(file, null);
+        }
+        else if (targets.FirstOrDefault(g => g.Name == choice) is { } target)
+        {
+            MoveFileToGroup(file, target);
+        }
+    }
+
+    private GroupHeader? GroupOf(DownloadedFile file)
+    {
+        GroupHeader? current = null;
+        foreach (var item in _master)
+        {
+            if (item is GroupHeader header)
+            {
+                current = header;
+            }
+            else if (ReferenceEquals(item, file))
+            {
+                return current;
+            }
+        }
+
+        return null;
+    }
+
+    // To the end of the group, or - for null - to the end of the videos that sit in no group.
+    private void MoveFileToGroup(DownloadedFile file, GroupHeader? group)
+    {
+        _master.Remove(file);
+
+        int insertAt;
+        if (group is null)
+        {
+            insertAt = _master.FindIndex(item => item is GroupHeader);
+            if (insertAt < 0)
+            {
+                insertAt = _master.Count;
+            }
+        }
+        else
+        {
+            insertAt = _master.IndexOf(group) + 1;
+            while (insertAt < _master.Count && _master[insertAt] is DownloadedFile)
+            {
+                insertAt++;
+            }
+
+            // Moved into a collapsed group it would vanish from view.
+            group.IsExpanded = true;
+        }
+
+        _master.Insert(insertAt, file);
+        RefreshStructure();
+        RebuildRows();
+    }
+
+    private async Task ShowGroupMenuAsync(GroupHeader group)
+    {
+        const string play = "Riproduci il gruppo";
+        const string rename = "Rinomina";
+        const string delete = "Elimina il gruppo (i video restano)";
+
+        var options = new List<string>();
+        if (MembersOf(group).Count > 0)
+        {
+            options.Add(play);
+        }
+
+        options.Add(rename);
+        options.Add(delete);
+
+#pragma warning disable CS0618 // see DeleteAsync below for why the non-Async alert methods are used
+        var choice = await DisplayActionSheet(group.Name, "Annulla", null, options.ToArray());
+#pragma warning restore CS0618
+
+        if (choice == play)
+        {
+            if (MembersOf(group).FirstOrDefault() is { } first)
+            {
+                StartPlayback(first);
+            }
+        }
+        else if (choice == rename)
+        {
+            var name = await AskGroupNameAsync("Rinomina il gruppo", group.Name);
+            if (name is not null)
+            {
+                group.Name = name;
+                SaveLayout();
+            }
+        }
+        else if (choice == delete)
+        {
+            DeleteGroup(group);
+        }
+    }
+
+    // The videos of a deleted group would fall into the group above it, so they are moved out to
+    // the ungrouped ones at the top first.
+    private void DeleteGroup(GroupHeader group)
+    {
+        var members = MembersOf(group);
+        _master.Remove(group);
+        foreach (var member in members)
+        {
+            _master.Remove(member);
+        }
+
+        var insertAt = _master.FindIndex(item => item is GroupHeader);
+        if (insertAt < 0)
+        {
+            insertAt = _master.Count;
+        }
+
+        _master.InsertRange(insertAt, members);
+        RefreshStructure();
+        RebuildRows();
     }
 
     // Fires once a row has been dragged to its new place (the CollectionView has already moved
-    // it in _files by then): save the order, which is also the order the files play back in.
+    // it in _rows by then). Folds the new position back into _master - a video dropped under a
+    // heading is now in that group - and saves it. Dragging a heading past another heading would
+    // reshuffle the groups, which isn't what that gesture is for, so it snaps back instead.
     private void OnReorderCompleted(object? sender, EventArgs e)
     {
         SetDraggingRow(null);
-        DownloadOrderStore.Save(_files.Select(f => f.FileName));
+
+        var oldHeaders = _master.OfType<GroupHeader>().ToList();
+        if (!oldHeaders.SequenceEqual(_rows.OfType<GroupHeader>()))
+        {
+            MainThread.BeginInvokeOnMainThread(RebuildRows);
+            return;
+        }
+
+        // A video can be dropped in its own group or in any other group, but one taken out of a
+        // group can't be let go outside every group: that drop is refused and it springs back.
+        // (Taking a video out of its group is what the row's menu is for.)
+        GroupHeader? headerAbove = null;
+        foreach (var row in _rows)
+        {
+            if (row is GroupHeader header)
+            {
+                headerAbove = header;
+            }
+            else if (row is DownloadedFile file && headerAbove is null && GroupOf(file) is not null)
+            {
+                MainThread.BeginInvokeOnMainThread(RebuildRows);
+                return;
+            }
+        }
+
+        var newMaster = new List<object>();
+        var needsRebuild = false;
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            var row = _rows[i];
+            newMaster.Add(row);
+            if (row is GroupHeader { IsExpanded: false } collapsed)
+            {
+                // Its hidden videos stay with it. One dropped right under it joins the group, so
+                // the group opens to show it.
+                newMaster.AddRange(MembersOf(collapsed));
+                if (i + 1 < _rows.Count && _rows[i + 1] is DownloadedFile)
+                {
+                    collapsed.IsExpanded = true;
+                    needsRebuild = true;
+                }
+            }
+        }
+
+        _master = newMaster;
+        RefreshStructure();
+        if (needsRebuild)
+        {
+            MainThread.BeginInvokeOnMainThread(RebuildRows);
+        }
     }
 
     // --- Highlight of the row being dragged -------------------------------------------------------
@@ -165,9 +548,9 @@ public partial class DownloadsPage : ContentPage
         {
             case UIKit.UIGestureRecognizerState.Began:
                 var indexPath = collectionView.IndexPathForItemAtPoint(recognizer.LocationInView(collectionView));
-                if (!_isSelectionMode && indexPath is not null && (int)indexPath.Item < _files.Count)
+                if (!_isSelectionMode && indexPath is not null && (int)indexPath.Item < _rows.Count)
                 {
-                    SetDraggingRow(_files[(int)indexPath.Item]);
+                    SetDraggingRow(_rows[(int)indexPath.Item] as DownloadedFile);
                 }
 
                 break;

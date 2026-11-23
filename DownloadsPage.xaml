@@ -3,42 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:models="clr-namespace:VideoLocalShow.Models"
+             xmlns:local="clr-namespace:VideoLocalShow"
              x:Class="VideoLocalShow.DownloadsPage"
              Title="Home">
 
-    <ContentPage.ToolbarItems>
-        <ToolbarItem x:Name="PlayAllToolbarItem" Text="Riproduci tutto" Clicked="OnPlayAllClicked" Order="Secondary" Priority="0" />
-        <ToolbarItem x:Name="SelectionToolbarItem" Text="Seleziona" Clicked="OnToggleSelectionModeClicked" Order="Primary" Priority="0" />
-    </ContentPage.ToolbarItems>
-
-    <Grid x:Name="RootGrid" Padding="10,8,10,0" RowDefinitions="Auto,*,Auto" RowSpacing="4">
-
-        <Label
-            x:Name="EmptyLabel"
-            Grid.Row="1"
-            Text="Non hai ancora scaricato nessun video."
-            TextColor="Gray"
-            HorizontalOptions="Center"
-            VerticalOptions="Center"
-            IsVisible="False" />
-
-        <RefreshView x:Name="DownloadsRefreshView" Grid.Row="1" Refreshing="OnRefreshing">
-            <!-- CanReorderItems is the CollectionView's own drag-to-reorder: press and hold a row,
-                 drag it to where it should go and let go. It moves the item inside the bound
-                 ObservableCollection itself, scrolls the list near its edges, and is switched off
-                 from code while multi-select is on (see OnToggleSelectionModeClicked). That order
-                 is also the playback order. -->
-            <CollectionView
-                x:Name="DownloadsList"
-                SelectionMode="None"
-                CanReorderItems="True"
-                ReorderCompleted="OnReorderCompleted">
-                <CollectionView.ItemsLayout>
-                    <LinearItemsLayout Orientation="Vertical" ItemSpacing="6" />
-                </CollectionView.ItemsLayout>
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="models:DownloadedFile">
-                        <Border Style="{StaticResource Card}" Padding="8">
+    <ContentPage.Resources>
+        <DataTemplate x:Key="FileTemplate" x:DataType="models:DownloadedFile">
+                        <Border Style="{StaticResource Card}" Padding="8" Margin="{Binding RowMargin}">
                             <!-- Tints the row while it is held for reordering, and puts it back
                                  when it is let go. -->
                             <Border.Triggers>
@@ -47,7 +18,7 @@
                                     <Setter Property="Stroke" Value="#C9791B" />
                                 </DataTrigger>
                             </Border.Triggers>
-                            <Grid ColumnDefinitions="Auto,72,*,Auto" ColumnSpacing="8">
+                            <Grid ColumnDefinitions="Auto,72,*,Auto,Auto" ColumnSpacing="8">
 
                                 <!-- Only shown in multi-select mode, replacing the play/delete
                                      buttons with a way to pick this row for a bulk delete. -->
@@ -105,10 +76,87 @@
                                     Padding="8"
                                     VerticalOptions="Center"
                                     IsVisible="{Binding ShowRowActions}" />
+                                <Button
+                                    Grid.Column="4"
+                                    Text="&#8942;"
+                                    FontSize="20"
+                                    Padding="0"
+                                    BackgroundColor="Transparent"
+                                    TextColor="Gray"
+                                    Command="{Binding MenuCommand}"
+                                    CommandParameter="{Binding .}"
+                                    SemanticProperties.Description="Sposta in un gruppo"
+                                    WidthRequest="32"
+                                    HeightRequest="32"
+                                    VerticalOptions="Center"
+                                    IsVisible="{Binding ShowRowActions}" />
                             </Grid>
                         </Border>
                     </DataTemplate>
-                </CollectionView.ItemTemplate>
+
+        <!-- A group heading: tap to expand or collapse; the dots open rename / delete / play. -->
+        <DataTemplate x:Key="HeaderTemplate" x:DataType="models:GroupHeader">
+            <Border Style="{StaticResource Card}" Padding="8,0" BackgroundColor="#22C9791B" Stroke="#55C9791B">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                    <Grid.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding ToggleCommand}" />
+                    </Grid.GestureRecognizers>
+                    <Label Grid.Column="0" Text="{Binding Arrow}" FontSize="14" TextColor="#C9791B" VerticalOptions="Center" />
+                    <Label Grid.Column="1" Text="{Binding Title}" FontAttributes="Bold" FontSize="13" LineBreakMode="TailTruncation" VerticalOptions="Center" />
+                    <Button
+                        Grid.Column="2"
+                        Text="&#8942;"
+                        FontSize="16"
+                        Padding="0"
+                        BackgroundColor="Transparent"
+                        TextColor="Gray"
+                        Command="{Binding MenuCommand}"
+                        SemanticProperties.Description="Opzioni del gruppo"
+                        WidthRequest="28"
+                        HeightRequest="24"
+                        VerticalOptions="Center" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <local:RowTemplateSelector
+            x:Key="RowSelector"
+            FileTemplate="{StaticResource FileTemplate}"
+            HeaderTemplate="{StaticResource HeaderTemplate}" />
+    </ContentPage.Resources>
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem x:Name="PlayAllToolbarItem" Text="Riproduci tutto" Clicked="OnPlayAllClicked" Order="Secondary" Priority="0" />
+        <ToolbarItem Text="Nuovo gruppo" Clicked="OnNewGroupClicked" Order="Secondary" Priority="1" />
+        <ToolbarItem x:Name="SelectionToolbarItem" Text="Seleziona" Clicked="OnToggleSelectionModeClicked" Order="Primary" Priority="0" />
+    </ContentPage.ToolbarItems>
+
+    <Grid x:Name="RootGrid" Padding="10,8,10,0" RowDefinitions="Auto,*,Auto" RowSpacing="4">
+
+        <Label
+            x:Name="EmptyLabel"
+            Grid.Row="1"
+            Text="Non hai ancora scaricato nessun video."
+            TextColor="Gray"
+            HorizontalOptions="Center"
+            VerticalOptions="Center"
+            IsVisible="False" />
+
+        <RefreshView x:Name="DownloadsRefreshView" Grid.Row="1" Refreshing="OnRefreshing">
+            <!-- CanReorderItems is the CollectionView's own drag-to-reorder: press and hold a row,
+                 drag it to where it should go and let go. It moves the item inside the bound
+                 ObservableCollection itself, scrolls the list near its edges, and is switched off
+                 from code while multi-select is on (see OnToggleSelectionModeClicked). That order
+                 is also the playback order. -->
+            <CollectionView
+                x:Name="DownloadsList"
+                SelectionMode="None"
+                CanReorderItems="True"
+                ItemTemplate="{StaticResource RowSelector}"
+                ReorderCompleted="OnReorderCompleted">
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout Orientation="Vertical" ItemSpacing="6" />
+                </CollectionView.ItemsLayout>
             </CollectionView>
         </RefreshView>
 
